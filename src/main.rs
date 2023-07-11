@@ -99,7 +99,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
         counter += 1;
 
         let color = color_from_hsv(block.hsv);
-        let title = format!("Block #{}", block.block_no);
+        let title = format!("[{}]", block.block_no);
 
         out
             .queue(cursor::MoveTo(
@@ -133,15 +133,25 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 if let Some(exit) = game.exit_for(block) {
                                     inverted = exit.id() != block.id;
                                 }
-                                "0123456789ABCDEF".chars().nth(block.block_no as usize).unwrap_or('X')
+                                "0123456789ABCDEF".chars().nth(block.block_no as usize).unwrap_or('G')
                             }
                         },
                         Cell::Reference(reference) => {
                             let target_no = reference.target_no;
                             let target = game.block_by_no(target_no).unwrap();
                             color = color_from_hsv(target.hsv);
-                            inverted = !reference.exit;
-                            "0123456789ABCDEF".chars().nth(target_no as usize).unwrap_or('X')
+                            match reference.link {
+                                ReferenceLink::InfExit { degree } => {
+                                    "IJKLMNOPQRST".chars().nth(degree as usize).unwrap_or('U')
+                                },
+                                ReferenceLink::InfEnter { degree, .. } => {
+                                    "ijklmnopqrst".chars().nth(degree as usize).unwrap_or('u')
+                                },
+                                ReferenceLink::None => {
+                                    inverted = !reference.exit;
+                                    "0123456789ABCDEF".chars().nth(target_no as usize).unwrap_or('G')
+                                },
+                            }
                         },
                     }
                 } else {

@@ -45,8 +45,8 @@ pub struct Reference {
     pub id: usize,
     pub gpos: GlobalPos,
     pub target_no: i32,
-    pub exit: bool,
     pub link: ReferenceLink,
+    pub exit: bool,
     pub possessable: bool,
     pub fliph: bool,
 }
@@ -143,6 +143,9 @@ impl Reference {
 }
 
 impl Game {
+    const SPACE_SIZE: i32 = 3;
+    const SPACE_CENTER: Pos = Pos(Self::SPACE_SIZE, Self::SPACE_SIZE);
+
     pub fn new() -> Self {
         Self {
             cells: Vec::new(),
@@ -185,13 +188,20 @@ impl Game {
 
     pub(super) fn add_space(&mut self) -> usize {
         let id = self.cells.len();
+        let mut min_no = 0;
+        for cell in &self.cells {
+            match cell {
+                Cell::Block(block) => min_no = min_no.min(block.block_no),
+                _ => {}
+            }
+        }
         self.cells.push(Cell::Block(Block {
             id,
             gpos: GlobalPos { block_id: usize::MAX, pos: Pos(0, 0) },
-            block_no: -1,
-            width: 7,
-            height: 7,
-            hsv: Hsv::new(0.0, 0.0, 0.0),
+            block_no: min_no - 1,
+            width: 2 * Self::SPACE_SIZE + 1,
+            height: 2 * Self::SPACE_SIZE + 1,
+            hsv: Hsv::new(0.0, 0.0, 0.5),
             filled: false,
             space: true,
             locked: false,
@@ -219,11 +229,11 @@ impl Game {
         Some(&self.cells[block.id])
     }
 
-    pub fn inf_exit_for(&self, block: &Block, degree: u32) -> Option<&Reference> {
+    pub fn inf_exit_for(&self, block_no: i32, degree: u32) -> Option<&Cell> {
         for cell in &self.cells {
             if let Cell::Reference(reference) = cell {
-                if reference.target_no == block.block_no && reference.link == (ReferenceLink::InfExit { degree }) {
-                    return Some(reference);
+                if reference.target_no == block_no && reference.link == (ReferenceLink::InfExit { degree }) {
+                    return Some(cell);
                 }
             }
         }
@@ -307,7 +317,7 @@ impl Game {
             }
             stack.truncate(depth);
 
-            let mut parent_id = stack.last().map_or(usize::MAX, |id| *id);
+            let parent_id = stack.last().map_or(usize::MAX, |id| *id);
 
             // println!("{:3} | {}", lineno + 1, line);
             // println!("depth = {}, parent_id = {}", depth, parent_id);
@@ -318,8 +328,8 @@ impl Game {
                         return Err(format!("Invalid block"));
                     }
 
-                    let mut x = parts[1].parse::<i32>().unwrap();
-                    let mut y = parts[2].parse::<i32>().unwrap();
+                    let x = parts[1].parse::<i32>().unwrap();
+                    let y = parts[2].parse::<i32>().unwrap();
                     let block_no = parts[3].parse::<i32>().unwrap();
                     let width = parts[4].parse::<i32>().unwrap();
                     let height = parts[5].parse::<i32>().unwrap();
@@ -342,13 +352,14 @@ impl Game {
                         panic!("Invalid block size");
                     }
 
-                    if floating {
-                        parent_id = game.add_space();
-                        x = 3;
-                        y = 3;
-                    }
-
-                    let gpos = GlobalPos { block_id: parent_id, pos: Pos(x, y) };
+                    let gpos = if floating {
+                        GlobalPos {
+                            block_id: game.add_space(),
+                            pos: Self::SPACE_CENTER
+                        }
+                    } else {
+                        GlobalPos { block_id: parent_id, pos: Pos(x, y) }
+                    };
                     game.check_pos(gpos)?;
 
                     let id = game.cells.len();
@@ -380,8 +391,8 @@ impl Game {
                         return Err(format!("Invalid reference"));
                     }
 
-                    let mut x = parts[1].parse::<i32>().unwrap();
-                    let mut y = parts[2].parse::<i32>().unwrap();
+                    let x = parts[1].parse::<i32>().unwrap();
+                    let y = parts[2].parse::<i32>().unwrap();
                     let target_no = parts[3].parse::<i32>().unwrap();
 
                     let mut exit = parts[4] == "1";
@@ -408,13 +419,14 @@ impl Game {
                     let fliph = parts[13] == "1";
                     let floating = parts[14] == "1";
 
-                    if floating {
-                        parent_id = game.add_space();
-                        x = 3;
-                        y = 3;
-                    }
-
-                    let gpos = GlobalPos { block_id: parent_id, pos: Pos(x, y) };
+                    let gpos = if floating {
+                        GlobalPos {
+                            block_id: game.add_space(),
+                            pos: Self::SPACE_CENTER
+                        }
+                    } else {
+                        GlobalPos { block_id: parent_id, pos: Pos(x, y) }
+                    };
                     game.check_pos(gpos)?;
 
                     let id = game.cells.len();
@@ -422,8 +434,8 @@ impl Game {
                         id,
                         gpos,
                         target_no,
-                        exit,
                         link,
+                        exit,
                         possessable,
                         fliph,
                     }));

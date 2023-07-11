@@ -1,5 +1,6 @@
 use super::utility::*;
 use super::game::*;
+use std::collections::HashMap;
 
 pub struct Simulator<'a> {
     game: &'a mut Game,
@@ -32,50 +33,94 @@ impl Simulator<'_> {
     /// Attempts to move the given cell towards the given direction.
     ///
     /// Returns true if the movement was successful.
-    fn try_move(&mut self, cell_id: usize, direction: Direction) -> bool {
-        self.try_move_from(cell_id, direction, self.game.cells[cell_id].gpos(), 0.5)
-    }
+    ///
+    /// TODO
+    /// - handle horizontal flips
+    /// - handle cycles; maybe check the direction?
+    fn try_move(&mut self, cell_id: usize, mut direction: Direction) -> bool {
+        let mut gpos = self.game.cells[cell_id].gpos();
+        let mut exit_point = 0.5;
 
-    /// TODO: handle infinite exits
-    /// TODO: handle horizontal flips
-    /// TODO: handle cycles; maybe check the direction?
-    fn try_move_from(&mut self, cell_id: usize, mut direction: Direction, mut gpos: GlobalPos, mut exit_point: f64) -> bool {
-        // first, try to move the cell in the given direction
-        gpos.pos.go(direction);
+        // context no -> degree
+        let mut exit_degree: HashMap<i32, u32> = HashMap::new();
 
-        let block: &Block = self.game.cells[gpos.block_id].block().unwrap();
-        // if the new position is still in the same block, we're done
-        if block.in_bounds(gpos.pos) {
-            return self.try_interact_pos(cell_id, direction, gpos, 0.5);
-        }
+        loop {
+            // first, try to move the cell in the given direction
+            gpos.pos.go(direction);
 
-        // otherwise, we need to exit the block
-        // first, check if the block can be exited
-        let exit = self.game.exit_for(block);
-        if exit.is_none() {
-            return false;
-        }
+            let block: &Block = self.game.cells[gpos.block_id].block().unwrap();
+            // if the new position is still in the same block, we're done
+            if block.in_bounds(gpos.pos) {
+                return self.try_interact_pos(cell_id, direction, gpos, exit_point);
+            }
 
-        // then, find the new exit point
-        let exit = exit.unwrap();
-        exit_point = match direction {
-            Direction::Up | Direction::Down =>
-                (gpos.pos.0 as f64 + exit_point) / block.width as f64,
-            Direction::Left | Direction::Right =>
-                (gpos.pos.1 as f64 + exit_point) / block.height as f64,
-        }.clamp(0.0, 1.0);
+            // otherwise, we need to exit the block
+            // first, check if the block can be exited
+            let exit = self.game.exit_for(block);
+            if exit.is_none() {
+                return false;
+            }
+            let mut exit = exit.unwrap();
 
-        // flip the direction if necessary
-        if exit.fliph() {
-            match direction {
-                Direction::Left => direction = Direction::Right,
-                Direction::Right => direction = Direction::Left,
-                _ => exit_point = 1.0 - exit_point,
+            let context_no = match exit {
+                Cell::Block(block) => block.block_no,
+                Cell::Reference(reference) => reference.target_no,
+                _ => unreachable!("exit should be a block or reference"),
             };
-            // TODO: flip the cell horizontally
-        }
 
-        self.try_move_from(cell_id, direction, exit.gpos(), exit_point)
+            if let Some(degree) = exit_degree.get_mut(&context_no) {
+                // this is an infinite exit
+                // redirect the exit to the inf exit
+                exit = match self.game.inf_exit_for(context_no, *degree) {
+                    Some(inf_exit) => inf_exit,
+                    None => {
+                        // if the inf exit does not exist, we need to create one
+                        let gpos = GlobalPos {
+                            block_id: self.game.add_space(),
+                            pos: Pos(3, 3)
+                        };
+                        let id = self.game.cells.len();
+                        self.game.cells.push(Cell::Reference(Reference {
+                            id,
+                            gpos,
+                            target_no: context_no,
+                            link: ReferenceLink::InfExit { degree: *degree },
+                            exit: false,
+                            possessable: false,
+                            fliph: false,
+                        }));
+                        &self.game.cells[id]
+                    }
+                };
+
+                // increase the degree next time
+                *degree += 1;
+            } else {
+                // this is a normal exit, record it in the map
+                exit_degree.insert(context_no, 0);
+
+                // find the new exit point
+                exit_point = match direction {
+                    Direction::Up | Direction::Down =>
+                        (gpos.pos.0 as f64 + exit_point) / block.width as f64,
+                    Direction::Left | Direction::Right =>
+                        (gpos.pos.1 as f64 + exit_point) / block.height as f64,
+                }.clamp(0.0, 1.0);
+            }
+
+            // flip the direction if necessary
+            if exit.fliph() {
+                match direction {
+                    Direction::Left => direction = Direction::Right,
+                    Direction::Right => direction = Direction::Left,
+                    _ => exit_point = 1.0 - exit_point,
+                };
+                // TODO: flip the cell horizontally
+            }
+
+            // try again from the new exit
+            gpos = exit.gpos();
+        }
     }
 
     /// Attempts to interact with the given position.
