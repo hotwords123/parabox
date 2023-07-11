@@ -7,10 +7,10 @@ use color_space::{ToRgb, Hsv};
 use parabox::engine::*;
 
 fn main() {
-    let level_file = "levels/enter.txt";
+    let level_file = "levels/file_format_example.txt";
     let text = std::fs::read_to_string(level_file).unwrap();
 
-    let mut game = Game::from_str(&text).unwrap();
+    let mut history = vec![Game::from_str(&text).unwrap()];
 
     // let sequence = "RUUUL URRRR RRDRU UUUDD DDDDL LLL";
     // for c in sequence.chars() {
@@ -25,30 +25,39 @@ fn main() {
 
     (|| {
         let mut stdout = BufWriter::new(std::io::stdout());
-        render(&game, &mut stdout).unwrap();
+        render(history.last().unwrap(), &mut stdout).unwrap();
 
         loop {
             let event = event::read();
             if let event::Event::Key(event) = event.unwrap() {
                 if event.kind == event::KeyEventKind::Press {
+                    let mut play = |direction: Direction| {
+                        let mut game = history.last().unwrap().clone();
+                        game.play(direction);
+                        history.push(game);
+                    };
+
                     match event.code {
-                        event::KeyCode::Char('w') => game.play(Direction::Up),
-                        event::KeyCode::Char('a') => game.play(Direction::Left),
-                        event::KeyCode::Char('s') => game.play(Direction::Down),
-                        event::KeyCode::Char('d') => game.play(Direction::Right),
-                        event::KeyCode::Char('r') => {
-                            game = Game::from_str(&text).unwrap();
+                        event::KeyCode::Char('w') => play(Direction::Up),
+                        event::KeyCode::Char('a') => play(Direction::Left),
+                        event::KeyCode::Char('s') => play(Direction::Down),
+                        event::KeyCode::Char('d') => play(Direction::Right),
+                        event::KeyCode::Char('r') => history.push(history.first().unwrap().clone()),
+                        event::KeyCode::Char('z') => {
+                            if history.len() > 1 {
+                                history.pop();
+                            }
                         },
                         event::KeyCode::Char('p') => {
-                            debug(&game);
+                            debug(history.last().unwrap());
                             continue;
                         },
                         event::KeyCode::Char('q') => break,
                         _ => continue,
                     }
 
-                    render(&game, &mut stdout).unwrap();
-
+                    let game = history.last().unwrap();
+                    render(game, &mut stdout).unwrap();
                     if game.won() {
                         println!("You won!");
                         break;
