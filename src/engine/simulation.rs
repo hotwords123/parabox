@@ -41,8 +41,8 @@ impl Simulator<'_> {
         let mut gpos = self.game.cells[cell_id].gpos();
         let mut exit_point = 0.5;
 
-        // context no -> degree
-        let mut exit_degree: HashMap<i32, u32> = HashMap::new();
+        // (context_no, direction) -> (exit_point, degree)
+        let mut exit_state: HashMap<(i32, Direction), (f64, u32)> = HashMap::new();
 
         loop {
             // first, try to move the cell in the given direction
@@ -56,11 +56,19 @@ impl Simulator<'_> {
 
             // otherwise, we need to exit the block
             // first, check if the block can be exited
-            let exit = self.game.exit_for(block);
-            if exit.is_none() {
+            let exit_id = self.game.exit_id_for(block);
+            if exit_id.is_none() {
                 return false;
             }
-            let mut exit = exit.unwrap();
+            let mut exit = &self.game.cells[exit_id.unwrap()];
+
+            // find the new exit point
+            exit_point = match direction {
+                Direction::Up | Direction::Down =>
+                    (gpos.pos.0 as f64 + exit_point) / block.width as f64,
+                Direction::Left | Direction::Right =>
+                    (gpos.pos.1 as f64 + exit_point) / block.height as f64,
+            }.clamp(0.0, 1.0);
 
             let context_no = match exit {
                 Cell::Block(block) => block.block_no,
@@ -68,44 +76,22 @@ impl Simulator<'_> {
                 _ => unreachable!("exit should be a block or reference"),
             };
 
-            if let Some(degree) = exit_degree.get_mut(&context_no) {
+            if let Some((point, degree)) = exit_state.get_mut(&(context_no, direction)) {
                 // this is an infinite exit
+                let inf_exit_id = self.game.inf_exit_id_for(context_no, *degree)
+                    .unwrap_or_else(|| self.game.add_inf_exit_for(context_no, *degree));
+
                 // redirect the exit to the inf exit
-                exit = match self.game.inf_exit_for(context_no, *degree) {
-                    Some(inf_exit) => inf_exit,
-                    None => {
-                        // if the inf exit does not exist, we need to create one
-                        let gpos = GlobalPos {
-                            block_id: self.game.add_space(),
-                            pos: Pos(3, 3)
-                        };
-                        let id = self.game.cells.len();
-                        self.game.cells.push(Cell::Reference(Reference {
-                            id,
-                            gpos,
-                            target_no: context_no,
-                            link: ReferenceLink::InfExit { degree: *degree },
-                            exit: false,
-                            possessable: false,
-                            fliph: false,
-                        }));
-                        &self.game.cells[id]
-                    }
-                };
+                exit = &self.game.cells[inf_exit_id];
+
+                // reset the exit point
+                exit_point = *point;
 
                 // increase the degree next time
                 *degree += 1;
             } else {
                 // this is a normal exit, record it in the map
-                exit_degree.insert(context_no, 0);
-
-                // find the new exit point
-                exit_point = match direction {
-                    Direction::Up | Direction::Down =>
-                        (gpos.pos.0 as f64 + exit_point) / block.width as f64,
-                    Direction::Left | Direction::Right =>
-                        (gpos.pos.1 as f64 + exit_point) / block.height as f64,
-                }.clamp(0.0, 1.0);
+                exit_state.insert((context_no, direction), (exit_point, 0));
             }
 
             // flip the direction if necessary

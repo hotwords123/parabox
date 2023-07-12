@@ -215,25 +215,25 @@ impl Game {
         self.block_map.get(&block_no).map(|id| self.cells[*id].block().unwrap())
     }
 
-    pub fn exit_for(&self, block: &Block) -> Option<&Cell> {
+    pub fn exit_id_for(&self, block: &Block) -> Option<usize> {
         if !block.can_exit() {
             return None;
         }
         for cell in &self.cells {
             if let Cell::Reference(reference) = cell {
                 if reference.exit && reference.target_no == block.block_no {
-                    return Some(cell);
+                    return Some(reference.id);
                 }
             }
         }
-        Some(&self.cells[block.id])
+        Some(block.id)
     }
 
-    pub fn inf_exit_for(&self, block_no: i32, degree: u32) -> Option<&Cell> {
+    pub fn inf_exit_id_for(&self, block_no: i32, degree: u32) -> Option<usize> {
         for cell in &self.cells {
             if let Cell::Reference(reference) = cell {
                 if reference.target_no == block_no && reference.link == (ReferenceLink::InfExit { degree }) {
-                    return Some(cell);
+                    return Some(reference.id);
                 }
             }
         }
@@ -249,6 +249,24 @@ impl Game {
             }
         }
         None
+    }
+
+    pub(super) fn add_inf_exit_for(&mut self, block_no: i32, degree: u32) -> usize {
+        let gpos = GlobalPos {
+            block_id: self.add_space(),
+            pos: Self::SPACE_CENTER,
+        };
+        let id = self.cells.len();
+        self.cells.push(Cell::Reference(Reference {
+            id,
+            gpos,
+            target_no: block_no,
+            link: ReferenceLink::InfExit { degree },
+            exit: false,
+            possessable: false,
+            fliph: false,
+        }));
+        id
     }
 
     /// Headers

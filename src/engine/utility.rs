@@ -7,7 +7,7 @@ pub struct GlobalPos {
     pub pos: Pos,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Direction {
     Up,
     Down,

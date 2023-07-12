@@ -139,8 +139,8 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                             } else if block.filled {
                                 'B'
                             } else {
-                                if let Some(exit) = game.exit_for(block) {
-                                    inverted = exit.id() != block.id;
+                                if let Some(exit_id) = game.exit_id_for(block) {
+                                    inverted = exit_id != block.id;
                                 }
                                 "0123456789ABCDEF".chars().nth(block.block_no as usize).unwrap_or('G')
                             }
@@ -176,7 +176,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                     }
                 };
 
-                let mut content = mark.to_string().with(color);
+                let mut content = mark.with(color);
                 if inverted {
                     content = content.negative();
                 }
