@@ -554,6 +554,6 @@ impl Game {
                 return false;
             }
         }
-        true
+        !self.goals.is_empty()
     }
 }
