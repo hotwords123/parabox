@@ -7,8 +7,8 @@ use color_space::{ToRgb, Hsv};
 use parabox::engine::*;
 
 fn main() {
-    let level_file = "levels/file_format_example.txt";
-    let text = std::fs::read_to_string(level_file).unwrap();
+    let args: Vec<String> = std::env::args().collect();
+    let text = std::fs::read_to_string(&args[1]).unwrap();
 
     let mut history = vec![Game::from_str(&text).unwrap()];
 
@@ -24,8 +24,9 @@ fn main() {
     // }
 
     (|| {
-        let mut stdout = BufWriter::new(std::io::stdout());
-        render(history.last().unwrap(), &mut stdout).unwrap();
+        let stdout = std::io::stdout();
+        let mut writer = BufWriter::new(stdout);
+        render(history.last().unwrap(), &mut writer).unwrap();
 
         loop {
             let event = event::read();
@@ -57,7 +58,7 @@ fn main() {
                     }
 
                     let game = history.last().unwrap();
-                    render(game, &mut stdout).unwrap();
+                    render(game, &mut writer).unwrap();
                     if game.won() {
                         println!("You won!");
                         break;
