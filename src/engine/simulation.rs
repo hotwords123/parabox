@@ -5,6 +5,8 @@ use std::collections::HashMap;
 pub struct Simulator<'a> {
     game: &'a mut Game,
     player_index: usize,
+    // (cell_id, direction, to)
+    move_stack: Vec<(usize, Direction, GlobalPos)>,
 }
 
 impl Simulator<'_> {
@@ -12,18 +14,20 @@ impl Simulator<'_> {
         Simulator {
             game,
             player_index: 0,
+            move_stack: Vec::new(),
         }
     }
 
     pub fn play(&mut self, direction: Direction) {
         for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
             self.player_index = i;
+            self.move_stack.clear();
             self.try_move(*player_id, direction);
         }
     }
 
-    fn move_cell(&mut self, cell_id: usize, to: GlobalPos) {
-        match &mut self.game.cells[cell_id] {
+    fn move_cell(game: &mut Game, cell_id: usize, to: GlobalPos) {
+        match &mut game.cells[cell_id] {
             Cell::Wall(wall) => wall.gpos = to,
             Cell::Block(block) => block.gpos = to,
             Cell::Reference(reference) => reference.gpos = to,
@@ -36,8 +40,24 @@ impl Simulator<'_> {
     ///
     /// TODO
     /// - handle horizontal flips
-    /// - handle cycles; maybe check the direction?
     fn try_move(&mut self, cell_id: usize, mut direction: Direction) -> bool {
+        if let Some((_, dir, _)) = self.move_stack.iter().find(|(id, ..)| *id == cell_id) {
+            // the cell is already in the move stack
+            // this means that the cell is in a cycle
+            if *dir == direction {
+                // the cell is moving in the same direction as before
+                // so the cells in the cycle can be moved together
+                for (id, _, to) in self.move_stack.iter().rev() {
+                    Self::move_cell(self.game, *id, *to);
+                    if *id == cell_id { break; }
+                }
+                return true;
+            } else {
+                // otherwise, the cell cannot be moved
+                return false;
+            }
+        }
+
         let mut gpos = self.game.cells[cell_id].gpos();
         let mut exit_point = 0.5;
 
@@ -120,7 +140,11 @@ impl Simulator<'_> {
         } else {
             // no cell exists at the target position
             // just walk up and take the position
-            self.move_cell(cell_id, target_gpos);
+            Self::move_cell(self.game, cell_id, target_gpos);
+            // also, all previous moves can be performed now
+            for (id, _, to) in self.move_stack.iter().rev() {
+                Self::move_cell(self.game, *id, *to);
+            }
             true
         }
     }
@@ -158,15 +182,16 @@ impl Simulator<'_> {
             return false;
         }
 
+        // move the pusher to the new position
+        self.move_stack.push((source_id, direction, target_gpos));
+
         // try to move the pushee cell
         if self.try_move(target_id, direction) {
-            // move the pusher to the new position
-            // FIXME: the cell is not necessarily moved in some cycle cases!
-            self.move_cell(source_id, target_gpos);
-            return true;
+            true
+        } else {
+            self.move_stack.pop();
+            false
         }
-
-        false
     }
 
     fn try_enter(&mut self, source_id: usize, target_id: usize, mut direction: Direction, mut enter_point: f64) -> bool {
@@ -235,19 +260,19 @@ impl Simulator<'_> {
             return false;
         }
 
+        // move the eater to the new position
+        self.move_stack.push((source_id, direction, target_gpos));
+
         // try to let the eaten cell enter the eater cell
         if self.try_enter(target_id, source_id, direction.opposite(), 0.5) {
-            // move the eater to the new position
-            self.move_cell(source_id, target_gpos);
-            return true;
+            true
+        } else {
+            self.move_stack.pop();
+            false
         }
-
-        false
     }
 
     fn try_possess(&mut self, source_id: usize, target_id: usize) -> bool {
-        // TODO: should we perform extra checks here?
-
         // only the current player can possess
         if source_id != self.game.player_ids[self.player_index] {
             return false;
