@@ -85,7 +85,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
 
     const WIDTH: u16 = 19;
     const HEIGHT: u16 = 12;
-    const COLUMNS: u16 = 5;
+    const COLUMNS: u16 = 8;
     let mut counter = 0u16;
 
     for cell in game.cells() {
@@ -95,7 +95,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
         }
 
         let block = block.unwrap();
-        if block.filled {
+        if game.is_block_trivial(block) {
             continue;
         }
 
@@ -129,15 +129,20 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
 
                 let mut color = color;
                 let mut inverted = false;
+                let mut underlined = false;
                 let mark = if let Some(cell) = game.cell_at(gpos) {
                     match &cell {
                         Cell::Wall(_) => '#',
                         Cell::Block(block) => {
                             color = color_from_hsv(block.hsv);
 
+                            if block.fliph {
+                                underlined = true;
+                            }
+
                             if game.player_ids().contains(&block.id) {
                                 'P'
-                            } else if block.filled {
+                            } else if game.is_block_trivial(block) {
                                 'B'
                             } else {
                                 if let Some(exit_id) = game.exit_id_for(block) {
@@ -150,12 +155,17 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                             let target_no = reference.target_no;
                             let target = game.block_by_no(target_no).unwrap();
                             color = color_from_hsv(target.hsv);
+
+                            if reference.fliph {
+                                underlined = true;
+                            }
+
                             match reference.link {
                                 ReferenceLink::InfExit { degree } => {
-                                    "IJKLMNOPQRST".chars().nth(degree as usize).unwrap_or('U')
+                                    "IJKLMN".chars().nth(degree as usize).unwrap_or('O')
                                 },
                                 ReferenceLink::InfEnter { degree, .. } => {
-                                    "ijklmnopqrst".chars().nth(degree as usize).unwrap_or('u')
+                                    "ijklmn".chars().nth(degree as usize).unwrap_or('o')
                                 },
                                 ReferenceLink::None => {
                                     inverted = !reference.exit;
@@ -180,6 +190,9 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                 let mut content = mark.with(color);
                 if inverted {
                     content = content.negative();
+                }
+                if underlined {
+                    content = content.underlined();
                 }
                 out.queue(style::PrintStyledContent(content))?;
             }

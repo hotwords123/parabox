@@ -186,6 +186,36 @@ impl Game {
         }
     }
 
+    pub fn is_block_trivial(&self, block: &Block) -> bool {
+        if block.filled {
+            // filled blocks are trivial
+            return true;
+        }
+
+        for x in 0..block.width {
+            for y in 0..block.height {
+                let cell = self.cell_at(GlobalPos {
+                    block_id: block.id,
+                    pos: Pos(x, y),
+                });
+
+                if x == 0 || y == 0 || x == block.width - 1 || y == block.height - 1 {
+                    // the border should be filled with non-possessable walls
+                    if let Some(Cell::Wall(wall)) = cell {
+                        if wall.possessable { return false; }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    // the inside should be empty
+                    if cell.is_some() { return false; }
+                }
+            }
+        }
+
+        true
+    }
+
     pub(super) fn add_space(&mut self) -> usize {
         let id = self.cells.len();
         let mut min_no = 0;
