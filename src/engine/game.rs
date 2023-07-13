@@ -125,7 +125,7 @@ impl Block {
     }
 
     pub fn can_enter(&self) -> bool {
-        !self.filled && !self.locked
+        !self.filled
     }
 
     pub fn can_exit(&self) -> bool {
