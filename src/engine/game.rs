@@ -7,7 +7,7 @@ use super::utility::*;
 pub struct Game {
     pub(super) cells: Vec<Cell>,
     pub(super) goals: Vec<Goal>,
-    pub(super) block_map: HashMap<i32, usize>,
+    pub(super) block_map: HashMap<BlockNo, usize>,
     pub(super) player_ids: Vec<usize>,
 }
 
@@ -25,11 +25,14 @@ pub struct Wall {
     pub possessable: bool,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BlockNo(pub i32);
+
 #[derive(Clone, Debug)]
 pub struct Block {
     pub id: usize,
     pub gpos: GlobalPos,
-    pub block_no: i32,
+    pub block_no: BlockNo,
     pub width: i32,
     pub height: i32,
     pub hsv: Hsv,
@@ -38,24 +41,18 @@ pub struct Block {
     pub locked: bool,
     pub possessable: bool,
     pub fliph: bool,
+    pub inf_enter: Option<(BlockNo, u32)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Reference {
     pub id: usize,
     pub gpos: GlobalPos,
-    pub target_no: i32,
-    pub link: ReferenceLink,
+    pub target_no: BlockNo,
     pub exit: bool,
+    pub inf_exit: Option<u32>,
     pub possessable: bool,
     pub fliph: bool,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ReferenceLink {
-    None,
-    InfExit { degree: u32 },
-    InfEnter { degree: u32, block_no: i32 },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -66,7 +63,7 @@ pub struct Goal {
 
 impl Cell {
     pub fn id(&self) -> usize {
-        match &self {
+        match self {
             Cell::Wall(wall) => wall.id,
             Cell::Block(block) => block.id,
             Cell::Reference(reference) => reference.id,
@@ -74,7 +71,7 @@ impl Cell {
     }
 
     pub fn gpos(&self) -> GlobalPos {
-        match &self {
+        match self {
             Cell::Wall(wall) => wall.gpos,
             Cell::Block(block) => block.gpos,
             Cell::Reference(reference) => reference.gpos,
@@ -82,7 +79,7 @@ impl Cell {
     }
 
     pub fn possessable(&self) -> bool {
-        match &self {
+        match self {
             Cell::Wall(wall) => wall.possessable,
             Cell::Block(block) => block.possessable,
             Cell::Reference(reference) => reference.possessable,
@@ -90,7 +87,7 @@ impl Cell {
     }
 
     pub fn fliph(&self) -> bool {
-        match &self {
+        match self {
             Cell::Wall(_) => false,
             Cell::Block(block) => block.fliph,
             Cell::Reference(reference) => reference.fliph,
@@ -98,14 +95,21 @@ impl Cell {
     }
 
     pub fn is_wall(&self) -> bool {
-        match &self {
+        match self {
             Cell::Wall(_) => true,
             _ => false,
         }
     }
 
     pub fn block(&self) -> Option<&Block> {
-        match &self {
+        match self {
+            Cell::Block(block) => Some(block),
+            _ => None,
+        }
+    }
+
+    pub fn block_mut(&mut self) -> Option<&mut Block> {
+        match self {
             Cell::Block(block) => Some(block),
             _ => None,
         }
@@ -116,6 +120,12 @@ impl Cell {
             Cell::Reference(reference) => Some(reference),
             _ => None,
         }
+    }
+}
+
+impl std::fmt::Display for BlockNo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -135,10 +145,7 @@ impl Block {
 
 impl Reference {
     pub fn can_enter(&self) -> bool {
-        match self.link {
-            ReferenceLink::InfExit { .. } => false,
-            _ => true,
-        }
+        self.inf_exit.is_none()
     }
 }
 
@@ -216,19 +223,22 @@ impl Game {
         true
     }
 
-    pub(super) fn add_space(&mut self) -> usize {
-        let id = self.cells.len();
-        let mut min_no = 0;
+    fn allocate_block_no(&self) -> BlockNo {
+        let mut result = 0;
         for cell in &self.cells {
-            match cell {
-                Cell::Block(block) => min_no = min_no.min(block.block_no),
-                _ => {}
+            if let Cell::Block(block) = cell {
+                result = result.max(block.block_no.0 + 1);
             }
         }
+        BlockNo(result)
+    }
+
+    pub(super) fn add_space(&mut self) -> usize {
+        let id = self.cells.len();
         self.cells.push(Cell::Block(Block {
             id,
             gpos: GlobalPos { block_id: usize::MAX, pos: Pos(0, 0) },
-            block_no: min_no - 1,
+            block_no: self.allocate_block_no(),
             width: 2 * Self::SPACE_SIZE + 1,
             height: 2 * Self::SPACE_SIZE + 1,
             hsv: Hsv::new(0.0, 0.0, 0.5),
@@ -237,11 +247,12 @@ impl Game {
             locked: false,
             possessable: false,
             fliph: false,
+            inf_enter: None,
         }));
         id
     }
 
-    pub fn block_by_no(&self, block_no: i32) -> Option<&Block> {
+    pub fn block_by_no(&self, block_no: BlockNo) -> Option<&Block> {
         self.block_map.get(&block_no).map(|id| self.cells[*id].block().unwrap())
     }
 
@@ -256,13 +267,13 @@ impl Game {
                 }
             }
         }
-        Some(block.id)
+        if block.gpos.block_id != usize::MAX { Some(block.id) } else { None }
     }
 
-    pub fn inf_exit_id_for(&self, block_no: i32, degree: u32) -> Option<usize> {
+    pub fn inf_exit_id_for(&self, block_no: BlockNo, degree: u32) -> Option<usize> {
         for cell in &self.cells {
             if let Cell::Reference(reference) = cell {
-                if reference.target_no == block_no && reference.link == (ReferenceLink::InfExit { degree }) {
+                if reference.target_no == block_no && reference.inf_exit == Some(degree) {
                     return Some(reference.id);
                 }
             }
@@ -270,18 +281,18 @@ impl Game {
         None
     }
 
-    pub fn inf_enter_for(&self, block: &Block, degree: u32) -> Option<&Block> {
+    pub fn inf_enter_id_for(&self, block: &Block, degree: u32) -> Option<usize> {
         for cell in &self.cells {
-            if let Cell::Reference(reference) = cell {
-                if reference.link == (ReferenceLink::InfEnter { degree, block_no: block.block_no }) {
-                    return self.block_by_no(reference.target_no);
+            if let Cell::Block(target) = cell {
+                if target.inf_enter == Some((block.block_no, degree)) {
+                    return Some(target.id);
                 }
             }
         }
         None
     }
 
-    pub(super) fn add_inf_exit_for(&mut self, block_no: i32, degree: u32) -> usize {
+    pub(super) fn add_inf_exit_for(&mut self, block_no: BlockNo, degree: u32) -> usize {
         let gpos = GlobalPos {
             block_id: self.add_space(),
             pos: Self::SPACE_CENTER,
@@ -291,10 +302,34 @@ impl Game {
             id,
             gpos,
             target_no: block_no,
-            link: ReferenceLink::InfExit { degree },
             exit: false,
+            inf_exit: Some(degree),
             possessable: false,
             fliph: false,
+        }));
+        id
+    }
+
+    pub(super) fn add_inf_enter_for(&mut self, block_no: BlockNo, degree: u32) -> usize {
+        let gpos = GlobalPos {
+            block_id: self.add_space(),
+            pos: Self::SPACE_CENTER,
+        };
+        let id = self.cells.len();
+        let block = self.block_by_no(block_no).unwrap();
+        self.cells.push(Cell::Block(Block {
+            id,
+            gpos,
+            block_no: self.allocate_block_no(),
+            width: 5,
+            height: 5,
+            hsv: block.hsv,
+            filled: false,
+            space: false,
+            locked: true,
+            possessable: false,
+            fliph: false,
+            inf_enter: Some((block_no, degree)),
         }));
         id
     }
@@ -330,6 +365,9 @@ impl Game {
 
         // player order -> cell id
         let mut players: Vec<(i32, usize)> = Vec::new();
+
+        // (block_no, degree), target_no
+        let mut inf_enter_record: Vec<((BlockNo, u32), BlockNo)> = Vec::new();
 
         let mut process = |line: &str| -> Result<(), String> {
             if line == "#" {
@@ -378,7 +416,7 @@ impl Game {
 
                     let x = parts[1].parse::<i32>().unwrap();
                     let y = parts[2].parse::<i32>().unwrap();
-                    let block_no = parts[3].parse::<i32>().unwrap();
+                    let block_no = BlockNo(parts[3].parse::<i32>().unwrap());
                     let width = parts[4].parse::<i32>().unwrap();
                     let height = parts[5].parse::<i32>().unwrap();
 
@@ -423,6 +461,7 @@ impl Game {
                         locked: false,
                         possessable,
                         fliph,
+                        inf_enter: None,
                     }));
 
                     if let Some(i) = player_order {
@@ -441,22 +480,20 @@ impl Game {
 
                     let x = parts[1].parse::<i32>().unwrap();
                     let y = parts[2].parse::<i32>().unwrap();
-                    let target_no = parts[3].parse::<i32>().unwrap();
+                    let target_no = BlockNo(parts[3].parse::<i32>().unwrap());
 
                     let mut exit = parts[4] == "1";
-                    let link = if parts[5] == "1" {
+                    let mut inf_exit = None;
+
+                    if parts[5] == "1" {
+                        let degree = parts[6].parse::<u32>().unwrap();
                         exit = false; // inf exits don't serve as an exit
-                        ReferenceLink::InfExit {
-                            degree: parts[6].parse::<u32>().unwrap()
-                        }
+                        inf_exit = Some(degree);
                     } else if parts[7] == "1" {
-                        ReferenceLink::InfEnter {
-                            degree: parts[8].parse::<u32>().unwrap(),
-                            block_no: parts[9].parse::<i32>().unwrap(),
-                        }
-                    } else {
-                        ReferenceLink::None
-                    };
+                        let degree = parts[8].parse::<u32>().unwrap();
+                        let block_no = BlockNo(parts[9].parse::<i32>().unwrap());
+                        inf_enter_record.push(((block_no, degree), target_no));
+                    }
 
                     let player_order = if parts[10] == "1" {
                         Some(parts[12].parse::<i32>().unwrap())
@@ -482,8 +519,8 @@ impl Game {
                         id,
                         gpos,
                         target_no,
-                        link,
                         exit,
+                        inf_exit,
                         possessable,
                         fliph,
                     }));
@@ -557,23 +594,25 @@ impl Game {
         };
 
         for (lineno, line) in text.lines().enumerate() {
-            if let Err(e) = process(line) {
-                return Err(format!("{}\n{} | {}", e, lineno + 1, line));
-            }
+            process(line)
+                .map_err(|e| format!("{}\n{} | {}", e, lineno + 1, line))?;
         }
 
         // check if all block_no are valid
         for cell in &game.cells {
             if let Cell::Reference(reference) = cell {
-                if game.block_map.get(&reference.target_no).is_none() {
+                if !game.block_map.contains_key(&reference.target_no) {
                     return Err(format!("Invalid reference target {}", reference.target_no));
                 }
-                if let ReferenceLink::InfEnter { block_no, .. } = reference.link {
-                    if game.block_map.get(&block_no).is_none() {
-                        return Err(format!("Invalid inf enter link {}", block_no));
-                    }
-                }
             }
+        }
+
+        // deal with inf enter
+        for (inf_enter, target_no) in inf_enter_record {
+            let block_id = *game.block_map.get(&target_no)
+                .ok_or_else(|| format!("Invalid inf enter target {}", target_no))?;
+            let block = game.cells[block_id].block_mut().unwrap();
+            block.inf_enter = Some(inf_enter);
         }
 
         // sort players by order

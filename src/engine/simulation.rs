@@ -7,6 +7,7 @@ pub struct Simulator<'a> {
     player_index: usize,
     // (cell_id, direction, to)
     move_stack: Vec<MoveState>,
+    enter_map: HashMap<EnterKey, EnterState>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -17,10 +18,19 @@ struct MoveState {
     direction: Direction,
 }
 
-type ExitKey = (i32, Direction);
+type TransferPoint = num_rational::Rational32;
+// (context_no, direction)
+type ExitKey = (BlockNo, Direction);
+// (current_id, block_no, direction, enter_point)
+type EnterKey = (usize, BlockNo, Direction, TransferPoint);
 
 struct ExitState {
-    exit_point: f64,
+    exit_point: TransferPoint,
+    degree: u32,
+    fliph: bool,
+}
+
+struct EnterState {
     degree: u32,
     fliph: bool,
 }
@@ -58,6 +68,7 @@ impl Simulator<'_> {
             game,
             player_index: 0,
             move_stack: Vec::new(),
+            enter_map: HashMap::new(),
         }
     }
 
@@ -65,6 +76,7 @@ impl Simulator<'_> {
         for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
             self.player_index = i;
             self.move_stack.clear();
+            self.enter_map.clear();
             self.try_move(*player_id, direction);
         }
     }
@@ -91,7 +103,7 @@ impl Simulator<'_> {
         }
 
         let mut current = MoveState::new(&self.game.cells[cell_id], direction);
-        let mut exit_point = 0.5;
+        let mut exit_point = TransferPoint::new_raw(1, 2);
 
         // (context_no, direction) -> (exit_point, degree)
         let mut exit_state: HashMap<ExitKey, ExitState> = HashMap::new();
@@ -117,10 +129,10 @@ impl Simulator<'_> {
             // find the new exit point
             exit_point = match current.direction {
                 Direction::Up | Direction::Down =>
-                    (current.gpos.pos.0 as f64 + exit_point) / block.width as f64,
+                    (exit_point + current.gpos.pos.0) / block.width,
                 Direction::Left | Direction::Right =>
-                    (current.gpos.pos.1 as f64 + exit_point) / block.height as f64,
-            }.clamp(0.0, 1.0);
+                    (exit_point + current.gpos.pos.1) / block.height,
+            };
 
             let context_no = match exit {
                 Cell::Block(block) => block.block_no,
@@ -151,7 +163,7 @@ impl Simulator<'_> {
                 match current.direction {
                     Direction::Left => current.direction = Direction::Right,
                     Direction::Right => current.direction = Direction::Left,
-                    _ => exit_point = 1.0 - exit_point,
+                    _ => exit_point = TransferPoint::from_integer(1) - exit_point,
                 };
                 current.fliph = !current.fliph;
             }
@@ -164,7 +176,7 @@ impl Simulator<'_> {
     /// Attempts to interact with the given position.
     ///
     /// Returns true if the occupation was successful.
-    fn try_interact_pos(&mut self, current: MoveState, point: f64) -> bool {
+    fn try_interact_pos(&mut self, current: MoveState, point: TransferPoint) -> bool {
         if let Some(target) = self.game.cell_at(current.gpos) {
             // some cell exists at the target position
             // try to interact with it
@@ -185,7 +197,7 @@ impl Simulator<'_> {
     /// The default attempt order is: push, enter, eat, possess.
     ///
     /// Returns true if the interaction was successful.
-    fn try_interact(&mut self, current: MoveState, target_id: usize, point: f64) -> bool {
+    fn try_interact(&mut self, current: MoveState, target_id: usize, point: TransferPoint) -> bool {
         if self.try_push(current, target_id) {
             return true;
         }
@@ -223,11 +235,9 @@ impl Simulator<'_> {
         }
     }
 
-    fn try_enter(&mut self, mut current: MoveState, target_id: usize, mut enter_point: f64) -> bool {
-        // TODO: handle infinite enters
-
+    fn try_enter(&mut self, mut current: MoveState, target_id: usize, mut enter_point: TransferPoint) -> bool {
         let target = &self.game.cells[target_id];
-        let block = match &target {
+        let mut block = match &target {
             Cell::Wall(_) => return false,
 
             Cell::Block(block) => {
@@ -259,19 +269,40 @@ impl Simulator<'_> {
             match current.direction {
                 Direction::Left => current.direction = Direction::Right,
                 Direction::Right => current.direction = Direction::Left,
-                _ => enter_point = 1.0 - enter_point,
+                _ => enter_point = TransferPoint::from_integer(1) -  enter_point,
             };
-            current.fliph = !current.fliph;
+        }
+
+        // check for infinite enter
+        let block_no = block.block_no;
+        let enter_key = (current.cell_id, block_no, current.direction, enter_point);
+        if let Some(state) = self.enter_map.get_mut(&enter_key) {
+            // this is an infinite enter
+            let inf_enter_id = self.game.inf_enter_id_for(block, state.degree)
+                .unwrap_or_else(|| self.game.add_inf_enter_for(block_no, state.degree));
+
+            // redirect to the inf enter block
+            block = self.game.cells[inf_enter_id].block().unwrap();
+            enter_point = TransferPoint::new_raw(1, 2);
+            current.fliph = state.fliph;
+
+            // increase the degree next time
+            state.degree += 1;
+        } else {
+            // this is a normal enter, record it in the map
+            self.enter_map.insert(enter_key, EnterState { degree: 0, fliph: current.fliph });
+
+            if fliph {
+                current.fliph = !current.fliph;
+            }
         }
 
         // convert the enter point to a coordinate, rounded down
         let mut enter_coord = |side_length: i32| -> i32 {
-            // FIXME: deal with floating point errors
-            // FIXME: what will happen if the enter point is exactly at the edge?
-            enter_point = enter_point * side_length as f64;
-            let coord = (enter_point + 1e-9).floor();
-            enter_point = (enter_point - coord).clamp(0.0, 1.0);
-            coord as i32
+            enter_point *= side_length;
+            let coord = enter_point.to_integer();
+            enter_point -= coord;
+            coord
         };
 
         // determine the enter pos
@@ -300,7 +331,7 @@ impl Simulator<'_> {
 
         // try to let the eaten cell enter the eater cell
         let eaten = MoveState::new(target, current.direction.opposite());
-        if self.try_enter(eaten, current.cell_id, 0.5) {
+        if self.try_enter(eaten, current.cell_id, TransferPoint::new_raw(1, 2)) {
             true
         } else {
             self.move_stack.pop();

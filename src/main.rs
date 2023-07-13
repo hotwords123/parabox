@@ -148,7 +148,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 if let Some(exit_id) = game.exit_id_for(block) {
                                     inverted = exit_id != block.id;
                                 }
-                                "0123456789ABCDEF".chars().nth(block.block_no as usize).unwrap_or('G')
+                                "0123456789ABCDEF".chars().nth(block.block_no.0 as usize).unwrap_or('G')
                             }
                         },
                         Cell::Reference(reference) => {
@@ -160,17 +160,11 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 underlined = true;
                             }
 
-                            match reference.link {
-                                ReferenceLink::InfExit { degree } => {
-                                    "IJKLMN".chars().nth(degree as usize).unwrap_or('O')
-                                },
-                                ReferenceLink::InfEnter { degree, .. } => {
-                                    "ijklmn".chars().nth(degree as usize).unwrap_or('o')
-                                },
-                                ReferenceLink::None => {
-                                    inverted = !reference.exit;
-                                    "0123456789ABCDEF".chars().nth(target_no as usize).unwrap_or('G')
-                                },
+                            if let Some(degree) = reference.inf_exit {
+                                "IJKLMN".chars().nth(degree as usize).unwrap_or('O')
+                            } else {
+                                inverted = !reference.exit;
+                                "0123456789ABCDEF".chars().nth(target_no.0 as usize).unwrap_or('G')
                             }
                         },
                     }
