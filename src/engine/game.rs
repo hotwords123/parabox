@@ -9,6 +9,7 @@ pub struct Game {
     pub(super) goals: Vec<Goal>,
     pub(super) block_map: HashMap<BlockNo, usize>,
     pub(super) player_ids: Vec<usize>,
+    pub(super) config: GameConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +60,21 @@ pub struct Reference {
 pub struct Goal {
     pub gpos: GlobalPos,
     pub player: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameConfig {
+    pub attempt_order: Vec<ActionType>,
+    pub shed: bool,
+    pub inner_push: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ActionType {
+    Push,
+    Enter,
+    Eat,
+    Possess,
 }
 
 impl Cell {
@@ -149,6 +165,16 @@ impl Reference {
     }
 }
 
+impl Default for GameConfig {
+    fn default() -> Self {
+        Self {
+            attempt_order: vec![ActionType::Push, ActionType::Enter, ActionType::Eat, ActionType::Possess],
+            shed: false,
+            inner_push: false,
+        }
+    }
+}
+
 impl Game {
     const SPACE_SIZE: i32 = 3;
     const SPACE_CENTER: Pos = Pos(Self::SPACE_SIZE, Self::SPACE_SIZE);
@@ -159,6 +185,7 @@ impl Game {
             goals: Vec::new(),
             block_map: HashMap::new(),
             player_ids: Vec::new(),
+            config: GameConfig::default(),
         }
     }
 
@@ -386,8 +413,27 @@ impl Game {
                         if version != "4" {
                             return Err(format!("Unsupported version: {}", version));
                         }
-                    }
-                    _ => {}
+                    },
+                    "attempt_order" => {
+                        let mut attempt_order = Vec::new();
+                        for part in parts[1].split(',') {
+                            match part {
+                                "push" => attempt_order.push(ActionType::Push),
+                                "enter" => attempt_order.push(ActionType::Enter),
+                                "eat" => attempt_order.push(ActionType::Eat),
+                                "possess" => attempt_order.push(ActionType::Possess),
+                                _ => return Err(format!("Unknown attempt order {}", part)),
+                            }
+                        }
+                        game.config.attempt_order = attempt_order;
+                    },
+                    "shed" => {
+                        game.config.shed = true;
+                    },
+                    "inner_push" => {
+                        game.config.inner_push = true;
+                    },
+                    _ => {},
                 }
                 return Ok(());
             }

@@ -211,23 +211,13 @@ impl Simulator<'_> {
     ///
     /// Returns true if the interaction was successful.
     fn try_interact(&mut self, current: MoveState, target_id: usize, point: TransferPoint) -> bool {
-        if self.try_push(current, target_id) {
-            return true;
-        }
-
-        if self.try_enter(current, target_id, point) {
-            return true;
-        }
-
-        if self.try_eat(current, target_id) {
-            return true;
-        }
-
-        if self.try_possess(current.cell_id, target_id) {
-            return true;
-        }
-
-        false
+        self.game.config.attempt_order.clone().iter()
+            .any(|action_type| match action_type {
+                ActionType::Push => self.try_push(current, target_id),
+                ActionType::Enter => self.try_enter(current, target_id, point),
+                ActionType::Eat => self.try_eat(current, target_id),
+                ActionType::Possess => self.try_possess(current.cell_id, target_id),
+            })
     }
 
     fn try_push(&mut self, current: MoveState, target_id: usize) -> bool {
