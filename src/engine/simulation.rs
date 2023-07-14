@@ -7,7 +7,8 @@ pub struct Simulator<'a> {
     player_index: usize,
     // (cell_id, direction, to)
     move_stack: Vec<MoveState>,
-    enter_map: HashMap<EnterKey, EnterState>,
+    transfer_stack: Vec<TransferCache>,
+    transfer_cache: TransferCache,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -18,11 +19,16 @@ struct MoveState {
     direction: Direction,
 }
 
+#[derive(Default)]
+struct TransferCache {
+    enter: HashMap<EnterKey, EnterState>,
+}
+
 type TransferPoint = num_rational::Rational32;
 // (context_no, direction)
 type ExitKey = (BlockNo, Direction);
-// (current_id, block_no, direction, enter_point)
-type EnterKey = (usize, BlockNo, Direction, TransferPoint);
+// (block_no, direction, enter_point)
+type EnterKey = (BlockNo, Direction, TransferPoint);
 
 struct ExitState {
     exit_point: TransferPoint,
@@ -62,13 +68,20 @@ impl MoveState {
     }
 }
 
+impl TransferCache {
+    fn clear(&mut self) {
+        self.enter.clear();
+    }
+}
+
 impl Simulator<'_> {
     pub fn new(game: &mut Game) -> Simulator {
         Simulator {
             game,
             player_index: 0,
             move_stack: Vec::new(),
-            enter_map: HashMap::new(),
+            transfer_stack: Vec::new(),
+            transfer_cache: Default::default(),
         }
     }
 
@@ -76,7 +89,7 @@ impl Simulator<'_> {
         for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
             self.player_index = i;
             self.move_stack.clear();
-            self.enter_map.clear();
+            self.transfer_cache.clear();
             self.try_move(*player_id, direction);
         }
     }
@@ -225,12 +238,14 @@ impl Simulator<'_> {
 
         // move the pusher to the new position
         self.move_stack.push(current);
+        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
 
         // try to move the pushee cell
         if self.try_move(target_id, current.direction) {
             true
         } else {
-            self.move_stack.pop();
+            self.move_stack.pop().unwrap();
+            self.transfer_cache = self.transfer_stack.pop().unwrap();
             false
         }
     }
@@ -275,8 +290,8 @@ impl Simulator<'_> {
 
         // check for infinite enter
         let block_no = block.block_no;
-        let enter_key = (current.cell_id, block_no, current.direction, enter_point);
-        if let Some(state) = self.enter_map.get_mut(&enter_key) {
+        let enter_key = (block_no, current.direction, enter_point);
+        if let Some(state) = self.transfer_cache.enter.get_mut(&enter_key) {
             // this is an infinite enter
             let inf_enter_id = self.game.inf_enter_id_for(block, state.degree)
                 .unwrap_or_else(|| self.game.add_inf_enter_for(block_no, state.degree));
@@ -290,7 +305,7 @@ impl Simulator<'_> {
             state.degree += 1;
         } else {
             // this is a normal enter, record it in the map
-            self.enter_map.insert(enter_key, EnterState { degree: 0, fliph: current.fliph });
+            self.transfer_cache.enter.insert(enter_key, EnterState { degree: 0, fliph: current.fliph });
 
             if fliph {
                 current.fliph = !current.fliph;
@@ -328,13 +343,15 @@ impl Simulator<'_> {
 
         // move the eater to the new position
         self.move_stack.push(current);
+        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
 
         // try to let the eaten cell enter the eater cell
         let eaten = MoveState::new(target, current.direction.opposite());
         if self.try_enter(eaten, current.cell_id, TransferPoint::new_raw(1, 2)) {
             true
         } else {
-            self.move_stack.pop();
+            self.move_stack.pop().unwrap();
+            self.transfer_cache = self.transfer_stack.pop().unwrap();
             false
         }
     }
