@@ -89,6 +89,7 @@ impl Simulator<'_> {
         for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
             self.player_index = i;
             self.move_stack.clear();
+            self.transfer_stack.clear();
             self.transfer_cache.clear();
             self.try_move(*player_id, direction);
         }
@@ -230,7 +231,35 @@ impl Simulator<'_> {
         if target.is_wall() {
             if self.game.config.inner_push {
                 // try to move the parent block of the wall
-                return self.try_move(target.gpos().block_id, current.direction);
+                let parent = self.game.cells[target.gpos().block_id].block().unwrap();
+                if let Some(exit_id) = self.game.exit_id_for(parent) {
+                    // inner push in cycles are not allowed
+                    if current.cell_id == exit_id || self.move_stack.iter().any(|s| s.cell_id == exit_id) {
+                        return false;
+                    }
+
+                    // even if the inner push succeeds, previous movements cannot be made
+                    // so we backup them now and restore them later
+                    let move_stack = std::mem::take(&mut self.move_stack);
+
+                    let exit = &self.game.cells[exit_id];
+                    let mut direction = current.direction;
+                    if exit.fliph() {
+                        // flip the direction if necessary
+                        match direction {
+                            Direction::Left => direction = Direction::Right,
+                            Direction::Right => direction = Direction::Left,
+                            _ => (),
+                        };
+                    }
+
+                    if self.try_move(exit_id, direction) {
+                        return true;
+                    }
+
+                    // restore previous movements
+                    self.move_stack = move_stack;
+                }
             }
             return false;
         }
