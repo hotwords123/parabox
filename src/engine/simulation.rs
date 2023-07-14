@@ -116,6 +116,11 @@ impl Simulator<'_> {
         }
 
         let mut current = MoveState::new(&self.game.cells[cell_id], direction);
+        if current.gpos.block_id == usize::MAX {
+            // root blocks cannot be moved
+            return false;
+        }
+
         let mut exit_point = TransferPoint::new_raw(1, 2);
 
         // (context_no, direction) -> (exit_point, degree)
@@ -223,6 +228,10 @@ impl Simulator<'_> {
     fn try_push(&mut self, current: MoveState, target_id: usize) -> bool {
         let target = &self.game.cells[target_id];
         if target.is_wall() {
+            if self.game.config.inner_push {
+                // try to move the parent block of the wall
+                return self.try_move(target.gpos().block_id, current.direction);
+            }
             return false;
         }
 
