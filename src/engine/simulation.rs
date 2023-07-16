@@ -4,23 +4,37 @@ use std::collections::HashMap;
 
 pub struct Simulator<'a> {
     game: &'a mut Game,
+
+    // index of the current player
     player_index: usize,
-    // (cell_id, direction, to)
+
+    // cells that has a tendency to move
+    // direction is the original position of the cell
+    // gpos is the target position of the cell (after the move is scheduled)
+    // fliph is the target fliph state of the cell (after the move is scheduled)
     move_stack: Vec<MoveState>,
-    transfer_stack: Vec<TransferCache>,
+
+    // cells in the stack starting from the index can actually be moved
+    move_index: usize,
+
+    // cache for transfer actions, used for inf exit/enter detection
     transfer_cache: TransferCache,
+
+    // stack for transfer cache
+    transfer_stack: Vec<TransferCache>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 struct MoveState {
     cell_id: usize,
+    direction: Direction,
     gpos: GlobalPos,
     fliph: bool,
-    direction: Direction,
 }
 
 #[derive(Default)]
 struct TransferCache {
+    exit: HashMap<ExitKey, ExitState>,
     enter: HashMap<EnterKey, EnterState>,
 }
 
@@ -29,6 +43,9 @@ type TransferPoint = num_rational::Rational32;
 type ExitKey = (BlockNo, Direction);
 // (block_no, direction, enter_point)
 type EnterKey = (BlockNo, Direction, TransferPoint);
+
+const MIDDLE_POINT: TransferPoint = TransferPoint::new_raw(1, 2);
+const ONE_POINT: TransferPoint = TransferPoint::new_raw(1, 1);
 
 struct ExitState {
     exit_point: TransferPoint,
@@ -45,10 +62,15 @@ impl MoveState {
     fn new(cell: &Cell, direction: Direction) -> MoveState {
         MoveState {
             cell_id: cell.id(),
+            direction,
             gpos: cell.gpos(),
             fliph: cell.fliph(),
-            direction,
         }
+    }
+
+    fn update(&mut self, other: MoveState) {
+        self.gpos = other.gpos;
+        self.fliph = other.fliph;
     }
 
     fn apply(self, game: &mut Game) {
@@ -70,6 +92,7 @@ impl MoveState {
 
 impl TransferCache {
     fn clear(&mut self) {
+        self.exit.clear();
         self.enter.clear();
     }
 }
@@ -80,116 +103,141 @@ impl Simulator<'_> {
             game,
             player_index: 0,
             move_stack: Vec::new(),
-            transfer_stack: Vec::new(),
+            move_index: 0,
             transfer_cache: Default::default(),
+            transfer_stack: Vec::new(),
         }
     }
 
     pub fn play(&mut self, direction: Direction) {
         for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
             self.player_index = i;
+            if self.try_move(*player_id, direction) {
+                for state in &self.move_stack[self.move_index..] {
+                    state.apply(self.game);
+                }
+            }
             self.move_stack.clear();
+            self.move_index = 0;
             self.transfer_stack.clear();
             self.transfer_cache.clear();
-            self.try_move(*player_id, direction);
         }
+    }
+
+    /// Attempts to start a new move and push it to the move stack. Also
+    /// pushes the old transfer cache to the transfer stack.
+    ///
+    /// If the move is started, returns the new move state.
+    ///
+    /// If the cell is already in the move stack, the bool value indicates
+    /// whether the cells in the cycle can be moved together.
+    fn try_push_move(&mut self, cell_id: usize, direction: Direction) -> Result<MoveState, bool> {
+        if let Some(i) = self.move_stack.iter().position(|s| s.cell_id == cell_id) {
+            // the cell is already in the move stack
+            // this means that the cell is in a cycle
+            if i >= self.move_index && self.move_stack[i].direction == direction {
+                // the cell is able to move, and it is moving in the same direction as before
+                // so the cells in the cycle can be moved together
+                self.move_index = i;
+                return Err(true);
+            } else {
+                // otherwise, the cell cannot be moved
+                return Err(false);
+            }
+        }
+
+        let current = MoveState::new(&self.game.cells[cell_id], direction);
+        self.move_stack.push(current);
+        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
+        Ok(current)
+    }
+
+    /// Pops the last move from the move stack, restoring the transfer cache.
+    fn pop_move(&mut self) {
+        self.move_stack.pop();
+        self.transfer_cache = self.transfer_stack.pop().unwrap();
     }
 
     /// Attempts to move the given cell towards the given direction.
     ///
     /// Returns true if the movement was successful.
     fn try_move(&mut self, cell_id: usize, direction: Direction) -> bool {
-        if let Some(i) = self.move_stack.iter().position(|s| s.cell_id == cell_id) {
-            // the cell is already in the move stack
-            // this means that the cell is in a cycle
-            let previous = self.move_stack[i];
-            if previous.direction == direction {
-                // the cell is moving in the same direction as before
-                // so the cells in the cycle can be moved together
-                for new_state in &self.move_stack[i..] {
-                    new_state.apply(self.game);
-                }
-                return true;
-            } else {
-                // otherwise, the cell cannot be moved
-                return false;
-            }
+        let current = match self.try_push_move(cell_id, direction) {
+            Ok(state) => state,
+            Err(can_move) => return can_move,
+        };
+
+        if current.gpos.block_id != usize::MAX && self.try_exit(current, MIDDLE_POINT) {
+            true
+        } else {
+            self.pop_move();
+            false
+        }
+    }
+
+    fn try_exit(&mut self, mut current: MoveState, mut exit_point: TransferPoint) -> bool {
+        // first, try to move the cell in the given direction
+        current.gpos.pos.go(current.direction);
+
+        let block: &Block = self.game.cells[current.gpos.block_id].block().unwrap();
+        // if the new position is still in the same block, we're done
+        if block.in_bounds(current.gpos.pos) {
+            return self.try_interact_pos(current, exit_point);
         }
 
-        let mut current = MoveState::new(&self.game.cells[cell_id], direction);
-        if current.gpos.block_id == usize::MAX {
-            // root blocks cannot be moved
+        // otherwise, we need to exit the block
+        // first, check if the block can be exited
+        let exit_id = self.game.exit_id_for(block);
+        if exit_id.is_none() {
             return false;
         }
+        let mut exit = &self.game.cells[exit_id.unwrap()];
 
-        let mut exit_point = TransferPoint::new_raw(1, 2);
+        // find the new exit point
+        exit_point = match current.direction {
+            Direction::Up | Direction::Down =>
+                (exit_point + current.gpos.pos.0) / block.width,
+            Direction::Left | Direction::Right =>
+                (exit_point + current.gpos.pos.1) / block.height,
+        };
 
-        // (context_no, direction) -> (exit_point, degree)
-        let mut exit_state: HashMap<ExitKey, ExitState> = HashMap::new();
+        let context_no = match exit {
+            Cell::Block(block) => block.block_no,
+            Cell::Reference(reference) => reference.target_no,
+            _ => unreachable!("exit should be a block or reference"),
+        };
+        let exit_key = (context_no, current.direction);
 
-        loop {
-            // first, try to move the cell in the given direction
-            current.gpos.pos.go(current.direction);
+        if let Some(state) = self.transfer_cache.exit.get_mut(&exit_key) {
+            // this is an infinite exit
+            let inf_exit_id = self.game.inf_exit_id_for(context_no, state.degree)
+                .unwrap_or_else(|| self.game.add_inf_exit_for(context_no, state.degree));
 
-            let block: &Block = self.game.cells[current.gpos.block_id].block().unwrap();
-            // if the new position is still in the same block, we're done
-            if block.in_bounds(current.gpos.pos) {
-                return self.try_interact_pos(current, exit_point);
-            }
+            // redirect the exit to the inf exit
+            exit = &self.game.cells[inf_exit_id];
+            exit_point = state.exit_point;
+            current.fliph = state.fliph;
 
-            // otherwise, we need to exit the block
-            // first, check if the block can be exited
-            let exit_id = self.game.exit_id_for(block);
-            if exit_id.is_none() {
-                return false;
-            }
-            let mut exit = &self.game.cells[exit_id.unwrap()];
-
-            // find the new exit point
-            exit_point = match current.direction {
-                Direction::Up | Direction::Down =>
-                    (exit_point + current.gpos.pos.0) / block.width,
-                Direction::Left | Direction::Right =>
-                    (exit_point + current.gpos.pos.1) / block.height,
-            };
-
-            let context_no = match exit {
-                Cell::Block(block) => block.block_no,
-                Cell::Reference(reference) => reference.target_no,
-                _ => unreachable!("exit should be a block or reference"),
-            };
-            let exit_key = (context_no, current.direction);
-
-            if let Some(state) = exit_state.get_mut(&exit_key) {
-                // this is an infinite exit
-                let inf_exit_id = self.game.inf_exit_id_for(context_no, state.degree)
-                    .unwrap_or_else(|| self.game.add_inf_exit_for(context_no, state.degree));
-
-                // redirect the exit to the inf exit
-                exit = &self.game.cells[inf_exit_id];
-                exit_point = state.exit_point;
-                current.fliph = state.fliph;
-
-                // increase the degree next time
-                state.degree += 1;
-            } else {
-                // this is a normal exit, record it in the map
-                exit_state.insert(exit_key, ExitState { exit_point, degree: 0, fliph: current.fliph });
-            }
-
-            // flip the direction if necessary
-            if exit.fliph() {
-                match current.direction {
-                    Direction::Left => current.direction = Direction::Right,
-                    Direction::Right => current.direction = Direction::Left,
-                    _ => exit_point = TransferPoint::from_integer(1) - exit_point,
-                };
-                current.fliph = !current.fliph;
-            }
-
-            // try again from the new exit
-            current.gpos = exit.gpos();
+            // increase the degree next time
+            state.degree += 1;
+        } else {
+            // this is a normal exit, record it in the map
+            self.transfer_cache.exit.insert(exit_key, ExitState { exit_point, degree: 0, fliph: current.fliph });
         }
+
+        // flip the direction if necessary
+        if exit.fliph() {
+            match current.direction {
+                Direction::Left => current.direction = Direction::Right,
+                Direction::Right => current.direction = Direction::Left,
+                _ => exit_point = ONE_POINT - exit_point,
+            };
+            current.fliph = !current.fliph;
+        }
+
+        // try again from the new exit
+        current.gpos = exit.gpos();
+        self.try_exit(current, exit_point)
     }
 
     /// Attempts to interact with the given position.
@@ -203,10 +251,7 @@ impl Simulator<'_> {
         } else {
             // no cell exists at the target position
             // just walk up and take the position
-            current.apply(self.game);
-            for new_state in &self.move_stack {
-                new_state.apply(self.game);
-            }
+            self.move_stack.last_mut().unwrap().update(current);
             true
         }
     }
@@ -233,14 +278,9 @@ impl Simulator<'_> {
                 // try to move the parent block of the wall
                 let parent = self.game.cells[target.gpos().block_id].block().unwrap();
                 if let Some(exit_id) = self.game.exit_id_for(parent) {
-                    // inner push in cycles are not allowed
-                    if current.cell_id == exit_id || self.move_stack.iter().any(|s| s.cell_id == exit_id) {
-                        return false;
-                    }
-
                     // even if the inner push succeeds, previous movements cannot be made
-                    // so we backup them now and restore them later
-                    let move_stack = std::mem::take(&mut self.move_stack);
+                    let old_move_index = self.move_index;
+                    self.move_index = self.move_stack.len();
 
                     let exit = &self.game.cells[exit_id];
                     let mut direction = current.direction;
@@ -258,24 +298,17 @@ impl Simulator<'_> {
                     }
 
                     // restore previous movements
-                    self.move_stack = move_stack;
+                    self.move_index = old_move_index;
                 }
             }
             return false;
         }
 
         // move the pusher to the new position
-        self.move_stack.push(current);
-        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
+        self.move_stack.last_mut().unwrap().update(current);
 
         // try to move the pushee cell
-        if self.try_move(target_id, current.direction) {
-            true
-        } else {
-            self.move_stack.pop().unwrap();
-            self.transfer_cache = self.transfer_stack.pop().unwrap();
-            false
-        }
+        self.try_move(target_id, current.direction)
     }
 
     fn try_enter(&mut self, mut current: MoveState, target_id: usize, mut enter_point: TransferPoint) -> bool {
@@ -302,6 +335,8 @@ impl Simulator<'_> {
             return false;
         }
 
+        // the cell might be already moved, so we need to fetch the newest fliph state
+        // if not found, then we shall use the state recorded in the game
         let fliph = match self.move_stack.iter().find(|s| s.cell_id == target_id) {
             Some(state) => state.fliph,
             None => target.fliph(),
@@ -312,7 +347,7 @@ impl Simulator<'_> {
             match current.direction {
                 Direction::Left => current.direction = Direction::Right,
                 Direction::Right => current.direction = Direction::Left,
-                _ => enter_point = TransferPoint::from_integer(1) -  enter_point,
+                _ => enter_point = ONE_POINT -  enter_point,
             };
         }
 
@@ -326,7 +361,7 @@ impl Simulator<'_> {
 
             // redirect to the inf enter block
             block = self.game.cells[inf_enter_id].block().unwrap();
-            enter_point = TransferPoint::new_raw(1, 2);
+            enter_point = MIDDLE_POINT;
             current.fliph = state.fliph;
 
             // increase the degree next time
@@ -370,16 +405,18 @@ impl Simulator<'_> {
         }
 
         // move the eater to the new position
-        self.move_stack.push(current);
-        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
+        self.move_stack.last_mut().unwrap().update(current);
 
         // try to let the eaten cell enter the eater cell
-        let eaten = MoveState::new(target, current.direction.opposite());
-        if self.try_enter(eaten, current.cell_id, TransferPoint::new_raw(1, 2)) {
+        let eaten = match self.try_push_move(target_id, current.direction.opposite()) {
+            Ok(state) => state,
+            Err(_) => return false, // can this happen?
+        };
+
+        if self.try_enter(eaten, current.cell_id, MIDDLE_POINT) {
             true
         } else {
-            self.move_stack.pop().unwrap();
-            self.transfer_cache = self.transfer_stack.pop().unwrap();
+            self.pop_move();
             false
         }
     }
