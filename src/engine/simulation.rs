@@ -131,11 +131,11 @@ impl Simulator<'_> {
     ///
     /// If the cell is already in the move stack, the bool value indicates
     /// whether the cells in the cycle can be moved together.
-    fn try_push_move(&mut self, cell_id: usize, direction: Direction) -> Result<MoveState, bool> {
+    fn try_push_move(&mut self, cell_id: usize, direction: Direction, allow_cycle: bool) -> Result<MoveState, bool> {
         if let Some(i) = self.move_stack.iter().position(|s| s.cell_id == cell_id) {
             // the cell is already in the move stack
             // this means that the cell is in a cycle
-            if i >= self.move_index && self.move_stack[i].direction == direction {
+            if allow_cycle && i >= self.move_index && self.move_stack[i].direction == direction {
                 // the cell is able to move, and it is moving in the same direction as before
                 // so the cells in the cycle can be moved together
                 self.move_index = i;
@@ -162,7 +162,7 @@ impl Simulator<'_> {
     ///
     /// Returns true if the movement was successful.
     fn try_move(&mut self, cell_id: usize, direction: Direction) -> bool {
-        let current = match self.try_push_move(cell_id, direction) {
+        let current = match self.try_push_move(cell_id, direction, true) {
             Ok(state) => state,
             Err(can_move) => return can_move,
         };
@@ -423,7 +423,7 @@ impl Simulator<'_> {
         self.move_stack.last_mut().unwrap().update(current);
 
         // try to let the eaten cell enter the eater cell
-        let eaten = match self.try_push_move(target_id, current.direction.opposite()) {
+        let eaten = match self.try_push_move(target_id, current.direction.opposite(), false) {
             Ok(state) => state,
             Err(_) => return false, // can this happen?
         };
