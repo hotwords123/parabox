@@ -225,6 +225,9 @@ impl Simulator<'_> {
             self.transfer_cache.exit.insert(exit_key, ExitState { exit_point, degree: 0, fliph: current.fliph });
         }
 
+        // this step is necessary because the exit might be redirected
+        let exit_id = exit.id();
+
         // flip the direction if necessary
         if exit.fliph() {
             match current.direction {
@@ -237,7 +240,19 @@ impl Simulator<'_> {
 
         // try again from the new exit
         current.gpos = exit.gpos();
-        self.try_exit(current, exit_point)
+        if self.try_exit(current, exit_point) {
+            return true;
+        }
+
+        if self.game.config.shed {
+            self.move_stack.last_mut().unwrap().update(current);
+
+            if self.try_move(exit_id, current.direction.opposite()) {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Attempts to interact with the given position.
