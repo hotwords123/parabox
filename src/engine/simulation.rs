@@ -445,6 +445,8 @@ impl Simulator<'_> {
         let target = &self.game.cells[target_id];
         if target.possessable() && !self.game.player_ids.contains(&target_id) {
             self.game.player_ids[self.player_index] = target_id;
+            // no cells can be moved
+            self.move_index = self.move_stack.len();
             return true;
         }
 
