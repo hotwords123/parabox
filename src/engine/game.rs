@@ -24,6 +24,7 @@ pub struct Wall {
     pub id: usize,
     pub gpos: GlobalPos,
     pub possessable: bool,
+    pub fliph: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -104,7 +105,7 @@ impl Cell {
 
     pub fn fliph(&self) -> bool {
         match self {
-            Cell::Wall(_) => false,
+            Cell::Wall(wall) => wall.fliph,
             Cell::Block(block) => block.fliph,
             Cell::Reference(reference) => reference.fliph,
         }
@@ -603,6 +604,7 @@ impl Game {
                         id,
                         gpos,
                         possessable,
+                        fliph: false,
                     }));
 
                     if let Some(i) = player_order {
@@ -682,6 +684,10 @@ impl Game {
             }
 
             let cell = cell.unwrap();
+            if cell.is_wall() {
+                return false;
+            }
+
             let player = self.player_ids.contains(&cell.id());
             if player != goal.player {
                 return false;

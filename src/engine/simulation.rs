@@ -77,6 +77,7 @@ impl MoveState {
         match &mut game.cells[self.cell_id] {
             Cell::Wall(wall) => {
                 wall.gpos = self.gpos;
+                wall.fliph = self.fliph;
             },
             Cell::Block(block) => {
                 block.gpos = self.gpos;
