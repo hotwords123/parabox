@@ -22,7 +22,7 @@ fn main() {
                 'L' => Direction::Left,
                 'R' => Direction::Right,
                 ' ' => continue,
-                _ => panic!("invalid sequence character: {}", c),
+                _ => panic!("invalid sequence character: {c}"),
             };
             game.play(direction);
         }
@@ -79,7 +79,7 @@ fn main() {
 
 fn debug(game: &Game) {
     for cell in game.cells() {
-        println!("{:?}", cell);
+        println!("{cell:?}");
     }
 }
 

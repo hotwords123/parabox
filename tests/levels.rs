@@ -26,11 +26,11 @@ fn test_level(path: &std::path::PathBuf) -> Result<(), String> {
             'L' => Direction::Left,
             'R' => Direction::Right,
             ' ' | '\n' => continue,
-            _ => return Err(format!("invalid solution character: {}", c)),
+            _ => return Err(format!("invalid solution character: {c}")),
         };
 
         if game.won() {
-            return Err(format!("should not win now after {} steps", steps));
+            return Err(format!("should not win now after {steps} steps"));
         }
 
         game.play(direction);
@@ -38,7 +38,7 @@ fn test_level(path: &std::path::PathBuf) -> Result<(), String> {
     }
 
     if !game.won() {
-        return Err(format!("should win now after {} steps", steps));
+        return Err(format!("should win now after {steps} steps"));
     }
 
     Ok(())

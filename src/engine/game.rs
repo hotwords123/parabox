@@ -212,9 +212,9 @@ impl Game {
         } else {
             let block = self.cells[gpos.block_id].block().unwrap();
             if !block.in_bounds(gpos.pos) {
-                Err(format!("Invalid position {:?}", gpos))
+                Err(format!("Invalid position {gpos:?}"))
             } else if self.cell_at(gpos).is_some() {
-                Err(format!("Cell already exists at {:?}", gpos))
+                Err(format!("Cell already exists at {gpos:?}"))
             } else {
                 Ok(())
             }
@@ -412,7 +412,7 @@ impl Game {
                     "version" => {
                         let version = parts[1];
                         if version != "4" {
-                            return Err(format!("Unsupported version: {}", version));
+                            return Err(format!("Unsupported version: {version}"));
                         }
                     },
                     "attempt_order" => {
@@ -423,7 +423,7 @@ impl Game {
                                 "enter" => attempt_order.push(ActionType::Enter),
                                 "eat" => attempt_order.push(ActionType::Eat),
                                 "possess" => attempt_order.push(ActionType::Possess),
-                                _ => return Err(format!("Unknown attempt order {}", part)),
+                                _ => return Err(format!("Unknown attempt order {part}")),
                             }
                         }
                         game.config.attempt_order = attempt_order;
@@ -658,7 +658,7 @@ impl Game {
         // deal with inf enter
         for (inf_enter, target_no) in inf_enter_record {
             let block_id = *game.block_map.get(&target_no)
-                .ok_or_else(|| format!("Invalid inf enter target {}", target_no))?;
+                .ok_or_else(|| format!("Invalid inf enter target {target_no}"))?;
             let block = game.cells[block_id].block_mut().unwrap();
             block.inf_enter = Some(inf_enter);
         }
