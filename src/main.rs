@@ -28,55 +28,53 @@ fn main() {
         }
     }
 
-    (|| {
-        let stdout = std::io::stdout();
-        let mut writer = BufWriter::new(stdout);
-        render(history.last().unwrap(), &mut writer).unwrap();
+    let stdout = std::io::stdout();
+    let mut writer = BufWriter::new(stdout);
+    render(history.last().unwrap(), &mut writer).unwrap();
 
-        let mut repaint = true;
+    let mut repaint = true;
 
-        loop {
-            let event = event::read();
-            if let event::Event::Key(event) = event.unwrap() {
-                if event.kind == event::KeyEventKind::Press {
-                    let mut play = |direction: Direction| {
-                        let mut game = history.last().unwrap().clone();
-                        game.play(direction);
-                        history.push(game);
-                    };
+    loop {
+        let event = event::read();
+        if let event::Event::Key(event) = event.unwrap() {
+            if event.kind == event::KeyEventKind::Press {
+                let mut play = |direction: Direction| {
+                    let mut game = history.last().unwrap().clone();
+                    game.play(direction);
+                    history.push(game);
+                };
 
-                    match event.code {
-                        event::KeyCode::Char('w') => play(Direction::Up),
-                        event::KeyCode::Char('a') => play(Direction::Left),
-                        event::KeyCode::Char('s') => play(Direction::Down),
-                        event::KeyCode::Char('d') => play(Direction::Right),
-                        event::KeyCode::Char('r') => history.push(history.first().unwrap().clone()),
-                        event::KeyCode::Char('z') => {
-                            if history.len() > 1 {
-                                history.pop();
-                            }
-                        },
-                        event::KeyCode::Char('p') => {
-                            debug(history.last().unwrap());
-                            continue;
-                        },
-                        event::KeyCode::Char('e') => repaint = !repaint,
-                        event::KeyCode::Char('q') => break,
-                        _ => continue,
-                    }
+                match event.code {
+                    event::KeyCode::Char('w') => play(Direction::Up),
+                    event::KeyCode::Char('a') => play(Direction::Left),
+                    event::KeyCode::Char('s') => play(Direction::Down),
+                    event::KeyCode::Char('d') => play(Direction::Right),
+                    event::KeyCode::Char('r') => history.push(history.first().unwrap().clone()),
+                    event::KeyCode::Char('z') => {
+                        if history.len() > 1 {
+                            history.pop();
+                        }
+                    },
+                    event::KeyCode::Char('p') => {
+                        debug(history.last().unwrap());
+                        continue;
+                    },
+                    event::KeyCode::Char('e') => repaint = !repaint,
+                    event::KeyCode::Char('q') => break,
+                    _ => continue,
+                }
 
-                    let game = history.last().unwrap();
-                    if repaint {
-                        render(game, &mut writer).unwrap();
-                    }
-                    if game.won() {
-                        println!("You won!");
-                        break;
-                    }
+                let game = history.last().unwrap();
+                if repaint {
+                    render(game, &mut writer).unwrap();
+                }
+                if game.won() {
+                    println!("You won!");
+                    break;
                 }
             }
         }
-    })();
+    }
 }
 
 fn debug(game: &Game) {
