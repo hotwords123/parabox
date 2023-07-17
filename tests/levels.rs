@@ -13,7 +13,7 @@ fn test_level(path: &std::path::PathBuf) -> Result<(), String> {
     }
 
     let text = fs::read_to_string(path).unwrap();
-    let mut game = Game::from_str(&text).unwrap();
+    let mut game = Game::parse(&text).unwrap();
 
     let solution = fs::read_to_string(&solution_path).unwrap();
 

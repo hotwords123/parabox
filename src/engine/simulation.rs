@@ -367,14 +367,12 @@ impl Simulator<'_> {
         let target = &self.game.cells[target_id];
         let mut block = match &target {
             Cell::Wall(_) => return false,
-
             Cell::Block(block) => {
                 if block.locked {
                     return false;
                 }
-                &block
+                block
             },
-
             Cell::Reference(reference) => {
                 if !reference.can_enter() {
                     return false;

@@ -25,10 +25,9 @@ impl Pos {
         }
     }
 
-    pub fn towards(&self, direction: Direction) -> Pos {
-        let mut pos = self.clone();
-        pos.go(direction);
-        pos
+    pub fn towards(mut self, direction: Direction) -> Pos {
+        self.go(direction);
+        self
     }
 }
 

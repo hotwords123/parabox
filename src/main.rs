@@ -10,7 +10,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let text = std::fs::read_to_string(&args[1]).unwrap();
 
-    let mut history = vec![Game::from_str(&text).unwrap()];
+    let mut history = vec![Game::parse(&text).unwrap()];
 
     // execute the startup sequence
     if let Some(sequence) = args.get(2) {
@@ -100,13 +100,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
     const COLUMNS: u16 = 8;
     let mut counter = 0u16;
 
-    for cell in game.cells() {
-        let block = cell.block();
-        if !block.is_some() {
-            continue;
-        }
-
-        let block = block.unwrap();
+    for block in game.cells().iter().filter_map(|cell| cell.block()) {
         if game.is_block_trivial(block) {
             continue;
         }

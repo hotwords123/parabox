@@ -112,10 +112,7 @@ impl Cell {
     }
 
     pub fn is_wall(&self) -> bool {
-        match self {
-            Cell::Wall(_) => true,
-            _ => false,
-        }
+        matches!(self, Cell::Wall(_))
     }
 
     pub fn block(&self) -> Option<&Block> {
@@ -179,16 +176,6 @@ impl Default for GameConfig {
 impl Game {
     const SPACE_SIZE: i32 = 3;
     const SPACE_CENTER: Pos = Pos(Self::SPACE_SIZE, Self::SPACE_SIZE);
-
-    pub fn new() -> Self {
-        Self {
-            cells: Vec::new(),
-            goals: Vec::new(),
-            block_map: HashMap::new(),
-            player_ids: Vec::new(),
-            config: GameConfig::default(),
-        }
-    }
 
     pub fn cells(&self) -> &Vec<Cell> {
         &self.cells
@@ -382,8 +369,14 @@ impl Game {
     /// Wall x y player possessable playerorder
     /// Floor x y type
     /// ```
-    pub fn from_str(text: &str) -> Result<Self, String> {
-        let mut game = Self::new();
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let mut game = Game {
+            cells: Vec::new(),
+            goals: Vec::new(),
+            block_map: HashMap::new(),
+            player_ids: Vec::new(),
+            config: GameConfig::default(),
+        };
 
         // whether we're still reading the header
         let mut reading_header = true;
@@ -446,7 +439,7 @@ impl Game {
 
             let depth = line.chars().take_while(|c| *c == '\t').count();
             if depth > stack.len() {
-                return Err(format!("Invalid indentation"));
+                return Err(format!("Invalid indentation {depth}"));
             }
             stack.truncate(depth);
 
@@ -458,7 +451,7 @@ impl Game {
             match parts[0] {
                 "Block" => {
                     if parts.len() < 17 {
-                        return Err(format!("Invalid block"));
+                        return Err(format!("Invalid block: expected 17 parts, found {}", parts.len()));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -482,7 +475,7 @@ impl Game {
                     let floating = parts[15] == "1";
 
                     if !filled && (width <= 0 || height <= 0) {
-                        panic!("Invalid block size");
+                        panic!("Invalid block size: {width}x{height}");
                     }
 
                     let gpos = if floating {
@@ -522,7 +515,7 @@ impl Game {
 
                 "Ref" => {
                     if parts.len() < 16 {
-                        return Err(format!("Invalid reference"));
+                        return Err(format!("Invalid reference: expected 16 parts, found {}", parts.len()));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -579,7 +572,7 @@ impl Game {
 
                 "Wall" => {
                     if parts.len() < 6 {
-                        return Err(format!("Invalid wall"));
+                        return Err(format!("Invalid wall: expected 6 parts, found {}", parts.len()));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -593,7 +586,7 @@ impl Game {
                     let possessable = parts[4] == "1";
 
                     if parent_id == usize::MAX {
-                        return Err(format!("Wall outside of block"));
+                        return Err("Wall outside of block".to_string());
                     }
 
                     let gpos = GlobalPos { block_id: parent_id, pos: Pos(x, y) };
@@ -614,7 +607,7 @@ impl Game {
 
                 "Floor" => {
                     if parts.len() < 4 {
-                        return Err(format!("Invalid floor"));
+                        return Err(format!("Invalid floor: expected 4 parts, found {}", parts.len()));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
