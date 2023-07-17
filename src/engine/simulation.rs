@@ -125,32 +125,38 @@ impl Simulator<'_> {
         }
     }
 
-    /// Attempts to start a new move and push it to the move stack. Also
-    /// pushes the old transfer cache to the transfer stack.
+    /// Checks whether the given cell is already in the move stack, that is, a
+    /// cycle exists.
     ///
-    /// If the move is started, returns the new move state.
+    /// If no cycle exists, returns `None`.
     ///
-    /// If the cell is already in the move stack, the bool value indicates
-    /// whether the cells in the cycle can be moved together.
-    fn try_push_move(&mut self, cell_id: usize, direction: Direction, allow_cycle: bool) -> Result<MoveState, bool> {
+    /// If a cycle exists, and the cells in it can move together, returns the
+    /// index of the cell in the move stack, i.e. the new `move_index`.
+    fn check_cycle(&self, cell_id: usize, direction: Direction) -> Option<Result<usize, ()>> {
         if let Some(i) = self.move_stack.iter().position(|s| s.cell_id == cell_id) {
-            // the cell is already in the move stack
-            // this means that the cell is in a cycle
-            if allow_cycle && i >= self.move_index && self.move_stack[i].direction == direction {
-                // the cell is able to move, and it is moving in the same direction as before
-                // so the cells in the cycle can be moved together
-                self.move_index = i;
-                return Err(true);
+            // The cell is already in the move stack, which means that the cell
+            // is in a cycle.
+            if i >= self.move_index && self.move_stack[i].direction == direction {
+                // The cell is moving in the same direction as before, so the
+                // cells in the cycle can move together.
+                Some(Ok(i))
             } else {
-                // otherwise, the cell cannot be moved
-                return Err(false);
+                // The cell is moving in a different direction, so the cells in
+                // the cycle cannot move together.
+                Some(Err(()))
             }
-        }
+        } else { None }
+    }
 
+    /// Starts a new move and push it to the move stack. Also pushes the old
+    /// transfer cache to the transfer stack.
+    ///
+    /// Returns the new move state.
+    fn push_move(&mut self, cell_id: usize, direction: Direction) -> MoveState {
         let current = MoveState::new(&self.game.cells[cell_id], direction);
         self.move_stack.push(current);
         self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
-        Ok(current)
+        current
     }
 
     /// Pops the last move from the move stack, restoring the transfer cache.
@@ -166,11 +172,18 @@ impl Simulator<'_> {
         // print!("{}", "  ".repeat(self.move_stack.len()));
         // println!("try_move: {:?} {:?}", cell_id, direction);
 
-        let current = match self.try_push_move(cell_id, direction, true) {
-            Ok(state) => state,
-            Err(can_move) => return can_move,
-        };
+        match self.check_cycle(cell_id, direction) {
+            Some(Ok(i)) => {
+                // The cell is in a cycle, and the cells in the cycle can move
+                // together. So we can just update the move index.
+                self.move_index = i;
+                return true;
+            },
+            Some(Err(())) => return false,
+            None => (),
+        }
 
+        let current = self.push_move(cell_id, direction);
         if current.gpos.block_id != usize::MAX && self.try_exit(current, MIDDLE_POINT) {
             true
         } else {
@@ -300,8 +313,19 @@ impl Simulator<'_> {
         // print!("{}", "  ".repeat(self.move_stack.len()));
         // println!("try_push: {:?} {:?}", current, target_id);
 
+        // move the pusher to the new position
+        self.move_stack.last_mut().unwrap().update(current);
+
         let target = &self.game.cells[target_id];
         if target.is_wall() {
+            // walls can be pushed in a cycle (typically when the wall is possessed)
+            if let Some(Ok(i)) = self.check_cycle(target_id, current.direction) {
+                // The wall is in a cycle, and the cells in the cycle can move
+                // together. So we can just update the move index.
+                self.move_index = i;
+                return true;
+            }
+
             if self.game.config.inner_push {
                 // try to move the parent block of the wall
                 let parent = self.game.cells[target.gpos().block_id].block().unwrap();
@@ -331,9 +355,6 @@ impl Simulator<'_> {
             }
             return false;
         }
-
-        // move the pusher to the new position
-        self.move_stack.last_mut().unwrap().update(current);
 
         // try to move the pushee cell
         self.try_move(target_id, current.direction)
@@ -431,14 +452,16 @@ impl Simulator<'_> {
             return false;
         }
 
+        // cycles are not allowed in eat
+        if self.move_stack.iter().any(|s| s.cell_id == target_id) {
+            return false;
+        }
+
         // move the eater to the new position
         self.move_stack.last_mut().unwrap().update(current);
 
         // try to let the eaten cell enter the eater cell
-        let mut eaten = match self.try_push_move(target_id, current.direction.opposite(), false) {
-            Ok(state) => state,
-            Err(_) => return false, // can this happen?
-        };
+        let mut eaten = self.push_move(target_id, current.direction.opposite());
 
         // The eat process can be divided into two parts:
         //
