@@ -349,7 +349,12 @@ impl Game {
         id
     }
 
-    /// Headers
+    /// Parses a level file and returns a Game object.
+    ///
+    /// A level file is a text file containing two parts: Header and Objects,
+    /// separated by a line containing only "#". The format is as follows:
+    ///
+    /// # Header
     /// ```plain
     /// version 4 (only required item)
     /// attempt_order push,enter,eat,possess (used in Priority area in-game with value "enter,eat,push,possess".)
@@ -362,10 +367,10 @@ impl Game {
     /// custom_level_palette -1 (-1 means no palette is applied)
     /// ```
     ///
-    /// Objects
+    /// # Objects
     /// ```plain
     /// Block x y id width height hue sat val zoomfactor fillwithwalls player possessable playerorder fliph floatinspace specialeffect
-    /// Ref x y id exitblock infexit infexitnum infenter infenternum infenterid player posssessable playerorder fliph floatinspace ///pecialeffect
+    /// Ref x y id exitblock infexit infexitnum infenter infenternum infenterid player posssessable playerorder fliph floatinspace specialeffect
     /// Wall x y player possessable playerorder
     /// Floor x y type
     /// ```
