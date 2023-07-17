@@ -163,6 +163,9 @@ impl Simulator<'_> {
     ///
     /// Returns true if the movement was successful.
     fn try_move(&mut self, cell_id: usize, direction: Direction) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_move: {:?} {:?}", cell_id, direction);
+
         let current = match self.try_push_move(cell_id, direction, true) {
             Ok(state) => state,
             Err(can_move) => return can_move,
@@ -177,6 +180,9 @@ impl Simulator<'_> {
     }
 
     fn try_exit(&mut self, mut current: MoveState, mut exit_point: TransferPoint) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_exit: {:?} {:?}", current, exit_point);
+
         // first, try to move the cell in the given direction
         current.gpos.pos.go(current.direction);
 
@@ -260,6 +266,9 @@ impl Simulator<'_> {
     ///
     /// Returns true if the occupation was successful.
     fn try_interact_pos(&mut self, current: MoveState, point: TransferPoint) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_interact_pos: {:?} {:?}", current, point);
+
         if let Some(target) = self.game.cell_at(current.gpos) {
             // some cell exists at the target position
             // try to interact with it
@@ -288,6 +297,9 @@ impl Simulator<'_> {
     }
 
     fn try_push(&mut self, current: MoveState, target_id: usize) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_push: {:?} {:?}", current, target_id);
+
         let target = &self.game.cells[target_id];
         if target.is_wall() {
             if self.game.config.inner_push {
@@ -328,6 +340,9 @@ impl Simulator<'_> {
     }
 
     fn try_enter(&mut self, mut current: MoveState, target_id: usize, mut enter_point: TransferPoint) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_enter: {:?} {:?} {:?}", current, target_id, enter_point);
+
         let target = &self.game.cells[target_id];
         let mut block = match &target {
             Cell::Wall(_) => return false,
@@ -351,15 +366,8 @@ impl Simulator<'_> {
             return false;
         }
 
-        // the cell might be already moved, so we need to fetch the newest fliph state
-        // if not found, then we shall use the state recorded in the game
-        let fliph = match self.move_stack.iter().find(|s| s.cell_id == target_id) {
-            Some(state) => state.fliph,
-            None => target.fliph(),
-        };
-
         // flip the direction if necessary
-        if fliph {
+        if target.fliph() {
             match current.direction {
                 Direction::Left => current.direction = Direction::Right,
                 Direction::Right => current.direction = Direction::Left,
@@ -386,7 +394,7 @@ impl Simulator<'_> {
             // this is a normal enter, record it in the map
             self.transfer_cache.enter.insert(enter_key, EnterState { degree: 0, fliph: current.fliph });
 
-            if fliph {
+            if target.fliph() {
                 current.fliph = !current.fliph;
             }
         }
@@ -415,6 +423,9 @@ impl Simulator<'_> {
     }
 
     fn try_eat(&mut self, current: MoveState, target_id: usize) -> bool {
+        // print!("{}", "  ".repeat(self.move_stack.len()));
+        // println!("try_eat: {:?} {:?}", current, target_id);
+
         let target = &self.game.cells[target_id];
         if target.is_wall() {
             return false;
@@ -424,10 +435,39 @@ impl Simulator<'_> {
         self.move_stack.last_mut().unwrap().update(current);
 
         // try to let the eaten cell enter the eater cell
-        let eaten = match self.try_push_move(target_id, current.direction.opposite(), false) {
+        let mut eaten = match self.try_push_move(target_id, current.direction.opposite(), false) {
             Ok(state) => state,
             Err(_) => return false, // can this happen?
         };
+
+        // The eat process can be divided into two parts:
+        //
+        // 1. the eaten cell enters the eater cell;
+        // 2. the eater cell takes the original position of the eaten cell.
+        //
+        // Ideally, the two parts should happen simultaneously. However, in
+        // order to check whether an eat process can happen, it is simpler to
+        // check part 2 first. Meanwhile, when it comes to actually carrying
+        // out the process, step 1 should be simulated first, since the
+        // prerequisite of step 2 is that the original position of the eaten
+        // cell is empty, and step 1 will make sure of that.
+        //
+        // When step 1 is simulated, the eaten cell might need to exit and
+        // enter blocks first before it can enter the eater cell, so we need to
+        // consider the fliph state during the transfer.
+        //
+        // If the eater cell's fliph changes during step 2, then we can infer
+        // that the eaten cells' fliph will also change during step 1. In this
+        // case, we need to flip the direction before letting the eaten cell
+        // enter the eater cell.
+        if current.fliph != self.game.cells[current.cell_id].fliph() {
+            match eaten.direction {
+                Direction::Left => eaten.direction = Direction::Right,
+                Direction::Right => eaten.direction = Direction::Left,
+                _ => (),
+            }
+            eaten.fliph = !eaten.fliph;
+        }
 
         if self.try_enter(eaten, current.cell_id, MIDDLE_POINT) {
             true
