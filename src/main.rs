@@ -12,16 +12,21 @@ fn main() {
 
     let mut history = vec![Game::from_str(&text).unwrap()];
 
-    // let sequence = "RUUUL URRRR RRDRU UUUDD DDDDL LLL";
-    // for c in sequence.chars() {
-    //     match c {
-    //         'U' => game.play(Direction::Up),
-    //         'D' => game.play(Direction::Down),
-    //         'L' => game.play(Direction::Left),
-    //         'R' => game.play(Direction::Right),
-    //         _ => (),
-    //     }
-    // }
+    // execute the startup sequence
+    if let Some(sequence) = args.get(2) {
+        let game = history.last_mut().unwrap();
+        for c in sequence.chars() {
+            let direction = match c {
+                'U' => Direction::Up,
+                'D' => Direction::Down,
+                'L' => Direction::Left,
+                'R' => Direction::Right,
+                ' ' => continue,
+                _ => panic!("invalid sequence character: {}", c),
+            };
+            game.play(direction);
+        }
+    }
 
     (|| {
         let stdout = std::io::stdout();
