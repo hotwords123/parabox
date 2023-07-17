@@ -33,6 +33,8 @@ fn main() {
         let mut writer = BufWriter::new(stdout);
         render(history.last().unwrap(), &mut writer).unwrap();
 
+        let mut repaint = true;
+
         loop {
             let event = event::read();
             if let event::Event::Key(event) = event.unwrap() {
@@ -58,12 +60,15 @@ fn main() {
                             debug(history.last().unwrap());
                             continue;
                         },
+                        event::KeyCode::Char('e') => repaint = !repaint,
                         event::KeyCode::Char('q') => break,
                         _ => continue,
                     }
 
                     let game = history.last().unwrap();
-                    render(game, &mut writer).unwrap();
+                    if repaint {
+                        render(game, &mut writer).unwrap();
+                    }
                     if game.won() {
                         println!("You won!");
                         break;
@@ -85,11 +90,15 @@ fn color_from_hsv(hsv: Hsv) -> style::Color {
     style::Color::Rgb { r: rgb.r as u8, g: rgb.g as u8, b: rgb.b as u8 }
 }
 
+fn block_no_to_char(block_no: BlockNo) -> char {
+    "0123456789ABCDEF".chars().nth(block_no.0 as usize).unwrap_or('G')
+}
+
 fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
     out.queue(terminal::Clear(terminal::ClearType::All))?;
 
     const WIDTH: u16 = 19;
-    const HEIGHT: u16 = 12;
+    const HEIGHT: u16 = 16;
     const COLUMNS: u16 = 8;
     let mut counter = 0u16;
 
@@ -114,7 +123,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
         counter += 1;
 
         let color = color_from_hsv(block.hsv);
-        let title = format!("[{}]", block.block_no);
+        let title = format!("[{}]", block_no_to_char(block.block_no));
 
         out
             .queue(cursor::MoveTo(
@@ -146,14 +155,14 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                             }
 
                             if game.player_ids().contains(&block.id) {
-                                'P'
+                                'p'
                             } else if game.is_block_trivial(block) {
-                                'B'
+                                'b'
                             } else {
                                 if let Some(exit_id) = game.exit_id_for(block) {
                                     inverted = exit_id != block.id;
                                 }
-                                "0123456789ABCDEF".chars().nth(block.block_no.0 as usize).unwrap_or('G')
+                                block_no_to_char(block.block_no)
                             }
                         },
                         Cell::Reference(reference) => {
@@ -169,7 +178,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 "IJKLMN".chars().nth(degree as usize).unwrap_or('O')
                             } else {
                                 inverted = !reference.exit;
-                                "0123456789ABCDEF".chars().nth(target_no.0 as usize).unwrap_or('G')
+                                block_no_to_char(target_no)
                             }
                         },
                     }
