@@ -342,7 +342,14 @@ impl Simulator<'_> {
             .iter()
             .any(|action_type| match action_type {
                 ActionType::Push => self.try_push(current, target_id),
-                ActionType::Enter => self.try_enter(current, target_id, point, false),
+                ActionType::Enter => {
+                    let moving = &self.move_stack[self.move_index..];
+                    if moving.iter().any(|s| s.cell_id == target_id) {
+                        // entering a moving cell is not allowed
+                        return false;
+                    }
+                    self.try_enter(current, target_id, point)
+                }
                 ActionType::Eat => self.try_eat(current, target_id),
                 ActionType::Possess => self.try_possess(current.cell_id, target_id),
             })
@@ -404,15 +411,9 @@ impl Simulator<'_> {
         mut current: MoveState,
         target_id: usize,
         mut enter_point: TransferPoint,
-        eat: bool,
     ) -> bool {
         // print!("{}", "  ".repeat(self.move_stack.len()));
         // println!("try_enter: {:?} {:?} {:?}", current, target_id, enter_point);
-
-        if !eat && self.move_stack[self.move_index..].iter().any(|s| s.cell_id == target_id) {
-            // entering a moving cell is not allowed
-            return false;
-        }
 
         let target = &self.game.cells[target_id];
         let mut block = match &target {
@@ -550,7 +551,7 @@ impl Simulator<'_> {
             eaten.fliph = !eaten.fliph;
         }
 
-        if self.try_enter(eaten, current.cell_id, MIDDLE_POINT, true) {
+        if self.try_enter(eaten, current.cell_id, MIDDLE_POINT) {
             true
         } else {
             self.pop_move();
