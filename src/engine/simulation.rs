@@ -418,13 +418,13 @@ impl Simulator<'_> {
         let mut block = match &target {
             Cell::Wall(_) => return false,
             Cell::Block(block) => {
-                if block.locked {
+                if self.game.is_space(block.gpos.block_id) {
                     return false;
                 }
                 block
             }
             Cell::Reference(reference) => {
-                if !reference.can_enter() {
+                if !reference.can_enter() || self.game.is_space(reference.gpos.block_id) {
                     return false;
                 }
                 self.game.block_by_no(reference.target_no).unwrap()

@@ -40,7 +40,6 @@ pub struct Block {
     pub hsv: Hsv,
     pub filled: bool,
     pub space: bool,
-    pub locked: bool,
     pub possessable: bool,
     pub fliph: bool,
     pub inf_enter: Option<(BlockNo, u32)>,
@@ -247,6 +246,13 @@ impl Game {
         true
     }
 
+    pub fn is_space(&self, block_id: usize) -> bool {
+        match self.cells.get(block_id) {
+            Some(Cell::Block(block)) => block.space,
+            _ => false,
+        }
+    }
+
     fn allocate_block_no(&self) -> BlockNo {
         let mut result = 0;
         for cell in &self.cells {
@@ -271,7 +277,6 @@ impl Game {
             hsv: Hsv::new(0.0, 0.0, 0.5),
             filled: false,
             space: true,
-            locked: false,
             possessable: false,
             fliph: false,
             inf_enter: None,
@@ -359,7 +364,6 @@ impl Game {
             hsv: block.hsv,
             filled: false,
             space: false,
-            locked: true,
             possessable: false,
             fliph: false,
             inf_enter: Some((block_no, degree)),
@@ -527,7 +531,6 @@ impl Game {
                         hsv: Hsv::new(360.0 * hue, sat, val),
                         filled,
                         space: false,
-                        locked: false,
                         possessable,
                         fliph,
                         inf_enter: None,
