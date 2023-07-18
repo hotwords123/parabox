@@ -1,0 +1,43 @@
+version 4
+attempt_order enter,eat,push,possess
+#
+Block -1 -1 0 9 9 0.6 0.8 1 1 0 0 0 0 0 0 8
+	Ref 4 4 0 1 0 0 0 0 -1 0 0 0 0 0 8
+	Wall 0 7 0 0 0
+	Wall 1 0 0 0 0
+	Wall 1 1 0 0 0
+	Wall 1 7 0 0 0
+	Wall 2 2 0 0 0
+	Wall 2 6 0 0 0
+	Wall 3 3 0 0 0
+	Wall 3 5 0 0 0
+	Wall 3 6 0 0 0
+	Wall 5 3 0 0 0
+	Wall 5 5 0 0 0
+	Wall 5 6 0 0 0
+	Wall 6 2 0 0 0
+	Wall 6 6 0 0 0
+	Wall 7 1 0 0 0
+	Wall 7 7 0 0 0
+	Wall 7 8 0 0 0
+	Wall 8 1 0 0 0
+	Floor 2 7 Button
+	Floor 7 6 PlayerButton
+	Block 1 4 2 5 5 0.1 0.8 1 1 0 0 0 0 0 0 0
+		Wall 0 0 0 0 0
+		Wall 0 1 0 0 0
+		Wall 0 2 0 0 0
+		Wall 0 3 0 0 0
+		Wall 0 4 0 0 0
+		Wall 1 0 0 0 0
+		Wall 1 4 0 0 0
+		Wall 2 0 0 0 0
+		Wall 2 4 0 0 0
+		Wall 3 0 0 0 0
+		Wall 3 4 0 0 0
+		Wall 4 0 0 0 0
+		Wall 4 1 0 0 0
+		Wall 4 2 0 0 0
+		Wall 4 3 0 0 0
+		Wall 4 4 0 0 0
+	Block 4 1 1 5 5 0.9 1 0.7 1 1 1 1 0 0 0 0

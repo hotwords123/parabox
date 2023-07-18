@@ -1,0 +1,58 @@
+version 4
+#
+Block -1 -1 0 11 11 0.6 0.8 1 1 0 0 0 0 0 0 0
+	Ref 2 4 0 1 0 0 0 0 -1 0 0 0 0 0 0
+	Ref 2 6 0 0 1 0 0 0 -1 0 0 0 0 0 0
+	Wall 0 0 0 0 0
+	Wall 0 1 0 0 0
+	Wall 0 2 0 0 0
+	Wall 0 3 0 0 0
+	Wall 0 4 0 0 0
+	Wall 0 5 0 0 0
+	Wall 0 6 0 0 0
+	Wall 0 7 0 0 0
+	Wall 0 8 0 0 0
+	Wall 0 9 0 0 0
+	Wall 0 10 0 0 0
+	Wall 1 10 0 0 0
+	Wall 2 10 0 0 0
+	Wall 3 10 0 0 0
+	Wall 4 10 0 0 0
+	Wall 5 3 0 0 0
+	Wall 5 4 0 0 0
+	Wall 5 5 0 0 0
+	Wall 5 6 0 0 0
+	Wall 5 8 0 0 0
+	Wall 5 9 0 0 0
+	Wall 5 10 0 0 0
+	Wall 6 3 0 0 0
+	Wall 6 8 0 0 0
+	Wall 6 9 0 0 0
+	Wall 6 10 0 0 0
+	Wall 7 3 0 0 0
+	Wall 7 8 0 0 0
+	Wall 7 9 0 0 0
+	Wall 7 10 0 0 0
+	Wall 8 3 0 0 0
+	Wall 8 8 0 0 0
+	Wall 8 9 0 0 0
+	Wall 8 10 0 0 0
+	Wall 9 3 0 0 0
+	Wall 9 8 0 0 0
+	Wall 9 9 0 0 0
+	Wall 9 10 0 0 0
+	Wall 10 0 0 0 0
+	Wall 10 1 0 0 0
+	Wall 10 2 0 0 0
+	Wall 10 3 0 0 0
+	Wall 10 4 0 0 0
+	Wall 10 5 0 0 0
+	Wall 10 6 0 0 0
+	Wall 10 7 0 0 0
+	Wall 10 8 0 0 0
+	Wall 10 9 0 0 0
+	Wall 10 10 0 0 0
+	Floor 7 4 Button
+	Floor 8 4 Button
+	Floor 9 4 PlayerButton
+	Block 2 2 1 5 5 0.9 1 0.7 1 1 1 1 0 0 0 0
