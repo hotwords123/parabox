@@ -102,6 +102,21 @@ impl TransferCache {
         self.exit.clear();
         self.enter.clear();
     }
+
+    fn try_push_state<F, K>(stack: &mut Vec<TransferState>, state: TransferState, key: F) -> Option<&mut TransferState>
+    where
+        F: Fn(&TransferState) -> K,
+        K: PartialEq,
+    {
+        let state_key = key(&state);
+        if let Some(i) = stack.iter().position(|s| key(s) == state_key) {
+            stack.truncate(i + 1);
+            Some(&mut stack[i])
+        } else {
+            stack.push(state);
+            None
+        }
+    }
 }
 
 impl Simulator<'_> {
@@ -240,12 +255,12 @@ impl Simulator<'_> {
             fliph: current.fliph,
         };
 
-        if let Some(i) = self.transfer_cache.exit.iter().position(|s| s.exit_key() == state.exit_key()) {
+        if let Some(state) = TransferCache::try_push_state(
+            &mut self.transfer_cache.exit,
+            state,
+            TransferState::exit_key
+        ) {
             // this is an infinite exit
-            // remove all exits after this one
-            self.transfer_cache.exit.truncate(i + 1);
-
-            let state = &mut self.transfer_cache.exit[i];
             let inf_exit_id = self.game.inf_exit_id_for(context_no, state.degree)
                 .unwrap_or_else(|| self.game.add_inf_exit_for(context_no, state.degree));
 
@@ -256,9 +271,6 @@ impl Simulator<'_> {
 
             // increase the degree next time
             state.degree += 1;
-        } else {
-            // this is a normal exit, record it in the map
-            self.transfer_cache.exit.push(state);
         }
 
         // this step is necessary because the exit might be redirected
@@ -419,11 +431,12 @@ impl Simulator<'_> {
             fliph: current.fliph,
         };
 
-        if let Some(i) = self.transfer_cache.enter.iter().position(|s| s.enter_key() == state.enter_key()) {
+        if let Some(state) = TransferCache::try_push_state(
+            &mut self.transfer_cache.enter,
+            state,
+            TransferState::enter_key
+        ) {
             // this is an infinite enter
-            self.transfer_cache.enter.truncate(i + 1);
-
-            let state = &mut self.transfer_cache.enter[i];
             let inf_enter_id = self.game.inf_enter_id_for(block, state.degree)
                 .unwrap_or_else(|| self.game.add_inf_enter_for(state.block_no, state.degree));
 
@@ -436,9 +449,6 @@ impl Simulator<'_> {
             // increase the degree next time
             state.degree += 1;
         } else {
-            // this is a normal enter, record it in the map
-            self.transfer_cache.enter.push(state);
-
             if target.fliph() {
                 current.fliph = !current.fliph;
             }
