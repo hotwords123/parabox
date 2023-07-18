@@ -14,7 +14,7 @@ The command line arguments are as follows:
 parabox <puzzle> [sequence]
 ```
 
-- `puzzle` is the path to the puzzle file you want to play, e.g. `levels/vanilla/enter.txt`. [File format](https://www.patricksparabox.com/custom-levels/)
+- `puzzle` is the path to the puzzle file you want to play, e.g. `levels/vanilla/enter.txt`. [File format](https://www.patricksparabox.com/custom-levels/#file-format)
 - `sequence` is a movement sequence specified as `LRUD` (Left, Right, Up, Down). This sequence will be executed when the game starts.
 
 With Cargo, you can use `cargo run -- <args>` to run the game.
@@ -68,5 +68,5 @@ The project is organized into the following modules:
 ## Acknowledgements
 
 - [Patrick Traynor](https://cwpat.me/about), for designing and developing the awesome game
-- [Patrick's Parabox Walkthrough - All Levels](https://steamcommunity.com/sharedfiles/filedetails/?id=2786724419), where I have taken the solutions to all vanilla levels (some are revised for horizontal flips)
+- [Patrick's Parabox: Direction Input Walkthrough and Achievement Guide - All Levels](https://steamcommunity.com/sharedfiles/filedetails/?id=2786724419), where I have taken the solutions to all vanilla levels (some are revised for horizontal flips)
 - [ChatGPT](https://chat.openai.com/), for writing the README
