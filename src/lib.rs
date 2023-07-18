@@ -1,8 +1,8 @@
 pub mod engine {
-    pub mod utility;
     pub mod game;
     pub mod simulation;
+    pub mod utility;
 
-    pub use utility::*;
     pub use game::*;
+    pub use utility::*;
 }

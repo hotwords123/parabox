@@ -1,10 +1,11 @@
-use std::io::{Write, BufWriter};
+use color_space::{Hsv, ToRgb};
 use crossterm::{
-    cursor, event, style::{self, Stylize}, terminal,
-    QueueableCommand
+    cursor, event,
+    style::{self, Stylize},
+    terminal, QueueableCommand,
 };
-use color_space::{ToRgb, Hsv};
 use parabox::engine::*;
+use std::io::{BufWriter, Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -54,11 +55,11 @@ fn main() {
                         if history.len() > 1 {
                             history.pop();
                         }
-                    },
+                    }
                     event::KeyCode::Char('p') => {
                         debug(history.last().unwrap());
                         continue;
-                    },
+                    }
                     event::KeyCode::Char('e') => repaint = !repaint,
                     event::KeyCode::Char('q') => break,
                     _ => continue,
@@ -85,11 +86,18 @@ fn debug(game: &Game) {
 
 fn color_from_hsv(hsv: Hsv) -> style::Color {
     let rgb = hsv.to_rgb();
-    style::Color::Rgb { r: rgb.r as u8, g: rgb.g as u8, b: rgb.b as u8 }
+    style::Color::Rgb {
+        r: rgb.r as u8,
+        g: rgb.g as u8,
+        b: rgb.b as u8,
+    }
 }
 
 fn block_no_to_char(block_no: BlockNo) -> char {
-    "0123456789ABCDEF".chars().nth(block_no.0 as usize).unwrap_or('G')
+    "0123456789ABCDEF"
+        .chars()
+        .nth(block_no.0 as usize)
+        .unwrap_or('G')
 }
 
 fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
@@ -117,21 +125,23 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
         let color = color_from_hsv(block.hsv);
         let title = format!("[{}]", block_no_to_char(block.block_no));
 
-        out
-            .queue(cursor::MoveTo(
-                area_x + (WIDTH - title.len() as u16) / 2,
-                offset_y
-            ))?
-            .queue(style::PrintStyledContent(title.with(color)))?;
+        out.queue(cursor::MoveTo(
+            area_x + (WIDTH - title.len() as u16) / 2,
+            offset_y,
+        ))?
+        .queue(style::PrintStyledContent(title.with(color)))?;
 
         for y in (0..block.height).rev() {
             out.queue(cursor::MoveTo(
                 offset_x,
-                offset_y + (block.height - y) as u16
+                offset_y + (block.height - y) as u16,
             ))?;
 
             for x in 0..block.width {
-                let gpos = GlobalPos { block_id: block.id, pos: Pos(x, y) };
+                let gpos = GlobalPos {
+                    block_id: block.id,
+                    pos: Pos(x, y),
+                };
 
                 let mut color = color;
                 let mut inverted = false;
@@ -156,7 +166,7 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 }
                                 block_no_to_char(block.block_no)
                             }
-                        },
+                        }
                         Cell::Reference(reference) => {
                             let target_no = reference.target_no;
                             let target = game.block_by_no(target_no).unwrap();
@@ -172,14 +182,18 @@ fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
                                 inverted = !reference.exit;
                                 block_no_to_char(target_no)
                             }
-                        },
+                        }
                     }
                 } else {
                     match game.goals().iter().find(|goal| goal.gpos == gpos) {
                         Some(goal) => {
                             color = style::Color::White;
-                            if goal.player { '=' } else { '_' }
-                        },
+                            if goal.player {
+                                '='
+                            } else {
+                                '_'
+                            }
+                        }
                         None => {
                             color = style::Color::Grey;
                             '.'

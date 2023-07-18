@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use color_space::Hsv;
+use std::collections::HashMap;
 
 use super::utility::*;
 
@@ -166,7 +166,12 @@ impl Reference {
 impl Default for GameConfig {
     fn default() -> Self {
         Self {
-            attempt_order: vec![ActionType::Push, ActionType::Enter, ActionType::Eat, ActionType::Possess],
+            attempt_order: vec![
+                ActionType::Push,
+                ActionType::Enter,
+                ActionType::Eat,
+                ActionType::Possess,
+            ],
             shed: false,
             inner_push: false,
         }
@@ -224,13 +229,17 @@ impl Game {
                 if x == 0 || y == 0 || x == block.width - 1 || y == block.height - 1 {
                     // the border should be filled with non-possessable walls
                     if let Some(Cell::Wall(wall)) = cell {
-                        if wall.possessable { return false; }
+                        if wall.possessable {
+                            return false;
+                        }
                     } else {
                         return false;
                     }
                 } else {
                     // the inside should be empty
-                    if cell.is_some() { return false; }
+                    if cell.is_some() {
+                        return false;
+                    }
                 }
             }
         }
@@ -252,7 +261,10 @@ impl Game {
         let id = self.cells.len();
         self.cells.push(Cell::Block(Block {
             id,
-            gpos: GlobalPos { block_id: usize::MAX, pos: Pos(0, 0) },
+            gpos: GlobalPos {
+                block_id: usize::MAX,
+                pos: Pos(0, 0),
+            },
             block_no: self.allocate_block_no(),
             width: 2 * Self::SPACE_SIZE + 1,
             height: 2 * Self::SPACE_SIZE + 1,
@@ -268,7 +280,9 @@ impl Game {
     }
 
     pub fn block_by_no(&self, block_no: BlockNo) -> Option<&Block> {
-        self.block_map.get(&block_no).map(|id| self.cells[*id].block().unwrap())
+        self.block_map
+            .get(&block_no)
+            .map(|id| self.cells[*id].block().unwrap())
     }
 
     pub fn exit_id_for(&self, block: &Block) -> Option<usize> {
@@ -282,7 +296,11 @@ impl Game {
                 }
             }
         }
-        if block.gpos.block_id != usize::MAX { Some(block.id) } else { None }
+        if block.gpos.block_id != usize::MAX {
+            Some(block.id)
+        } else {
+            None
+        }
     }
 
     pub fn inf_exit_id_for(&self, block_no: BlockNo, degree: u32) -> Option<usize> {
@@ -398,13 +416,13 @@ impl Game {
         let mut process = |line: &str| -> Result<(), String> {
             if line == "#" {
                 reading_header = false;
-                return Ok(())
+                return Ok(());
             }
 
             if reading_header {
                 let parts = line.split_ascii_whitespace().collect::<Vec<_>>();
                 if parts.is_empty() {
-                    return Ok(())
+                    return Ok(());
                 }
                 match parts[0] {
                     "version" => {
@@ -412,7 +430,7 @@ impl Game {
                         if version != "4" {
                             return Err(format!("Unsupported version: {version}"));
                         }
-                    },
+                    }
                     "attempt_order" => {
                         let mut attempt_order = Vec::new();
                         for part in parts[1].split(',') {
@@ -425,14 +443,14 @@ impl Game {
                             }
                         }
                         game.config.attempt_order = attempt_order;
-                    },
+                    }
                     "shed" => {
                         game.config.shed = true;
-                    },
+                    }
                     "inner_push" => {
                         game.config.inner_push = true;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
                 return Ok(());
             }
@@ -456,7 +474,10 @@ impl Game {
             match parts[0] {
                 "Block" => {
                     if parts.len() < 17 {
-                        return Err(format!("Invalid block: expected 17 parts, found {}", parts.len()));
+                        return Err(format!(
+                            "Invalid block: expected 17 parts, found {}",
+                            parts.len()
+                        ));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -486,10 +507,13 @@ impl Game {
                     let gpos = if floating {
                         GlobalPos {
                             block_id: game.add_space(),
-                            pos: Self::SPACE_CENTER
+                            pos: Self::SPACE_CENTER,
                         }
                     } else {
-                        GlobalPos { block_id: parent_id, pos: Pos(x, y) }
+                        GlobalPos {
+                            block_id: parent_id,
+                            pos: Pos(x, y),
+                        }
                     };
                     game.check_pos(gpos)?;
 
@@ -516,11 +540,14 @@ impl Game {
                     game.block_map.insert(block_no, id);
 
                     stack.push(id);
-                },
+                }
 
                 "Ref" => {
                     if parts.len() < 16 {
-                        return Err(format!("Invalid reference: expected 16 parts, found {}", parts.len()));
+                        return Err(format!(
+                            "Invalid reference: expected 16 parts, found {}",
+                            parts.len()
+                        ));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -552,10 +579,13 @@ impl Game {
                     let gpos = if floating {
                         GlobalPos {
                             block_id: game.add_space(),
-                            pos: Self::SPACE_CENTER
+                            pos: Self::SPACE_CENTER,
                         }
                     } else {
-                        GlobalPos { block_id: parent_id, pos: Pos(x, y) }
+                        GlobalPos {
+                            block_id: parent_id,
+                            pos: Pos(x, y),
+                        }
                     };
                     game.check_pos(gpos)?;
 
@@ -573,11 +603,14 @@ impl Game {
                     if let Some(i) = player_order {
                         players.push((i, id));
                     }
-                },
+                }
 
                 "Wall" => {
                     if parts.len() < 6 {
-                        return Err(format!("Invalid wall: expected 6 parts, found {}", parts.len()));
+                        return Err(format!(
+                            "Invalid wall: expected 6 parts, found {}",
+                            parts.len()
+                        ));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -594,7 +627,10 @@ impl Game {
                         return Err("Wall outside of block".to_string());
                     }
 
-                    let gpos = GlobalPos { block_id: parent_id, pos: Pos(x, y) };
+                    let gpos = GlobalPos {
+                        block_id: parent_id,
+                        pos: Pos(x, y),
+                    };
                     game.check_pos(gpos)?;
 
                     let id = game.cells.len();
@@ -608,11 +644,14 @@ impl Game {
                     if let Some(i) = player_order {
                         players.push((i, id));
                     }
-                },
+                }
 
                 "Floor" => {
                     if parts.len() < 4 {
-                        return Err(format!("Invalid floor: expected 4 parts, found {}", parts.len()));
+                        return Err(format!(
+                            "Invalid floor: expected 4 parts, found {}",
+                            parts.len()
+                        ));
                     }
 
                     let x = parts[1].parse::<i32>().unwrap();
@@ -631,7 +670,7 @@ impl Game {
                         },
                         player,
                     });
-                },
+                }
 
                 _ => return Err(format!("Unknown object type {}", parts[0])),
             }
@@ -640,8 +679,7 @@ impl Game {
         };
 
         for (lineno, line) in text.lines().enumerate() {
-            process(line)
-                .map_err(|e| format!("{}\n{} | {}", e, lineno + 1, line))?;
+            process(line).map_err(|e| format!("{}\n{} | {}", e, lineno + 1, line))?;
         }
 
         // check if all block_no are valid
@@ -655,7 +693,9 @@ impl Game {
 
         // deal with inf enter
         for (inf_enter, target_no) in inf_enter_record {
-            let block_id = *game.block_map.get(&target_no)
+            let block_id = *game
+                .block_map
+                .get(&target_no)
                 .ok_or_else(|| format!("Invalid inf enter target {target_no}"))?;
             let block = game.cells[block_id].block_mut().unwrap();
             block.inf_enter = Some(inf_enter);

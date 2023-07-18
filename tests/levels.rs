@@ -1,5 +1,5 @@
-use std::{fs, ffi::OsStr};
 use parabox::engine::*;
+use std::{ffi::OsStr, fs};
 
 struct LevelResult {
     level_name: String,
@@ -53,7 +53,10 @@ fn scan_level_dir(path: &str, results: &mut Vec<LevelResult>) {
         } else if path.extension() == Some(OsStr::new("txt")) {
             if let Err(message) = test_level(&path) {
                 let level_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-                results.push(LevelResult { level_name, message });
+                results.push(LevelResult {
+                    level_name,
+                    message,
+                });
             }
         }
     });

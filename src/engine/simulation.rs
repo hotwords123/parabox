@@ -1,5 +1,5 @@
-use super::utility::*;
 use super::game::*;
+use super::utility::*;
 
 pub struct Simulator<'a> {
     game: &'a mut Game,
@@ -84,15 +84,15 @@ impl MoveState {
             Cell::Wall(wall) => {
                 wall.gpos = self.gpos;
                 wall.fliph = self.fliph;
-            },
+            }
             Cell::Block(block) => {
                 block.gpos = self.gpos;
                 block.fliph = self.fliph;
-            },
+            }
             Cell::Reference(reference) => {
                 reference.gpos = self.gpos;
                 reference.fliph = self.fliph;
-            },
+            }
         }
     }
 }
@@ -103,7 +103,11 @@ impl TransferCache {
         self.enter.clear();
     }
 
-    fn try_push_state<F, K>(stack: &mut Vec<TransferState>, state: TransferState, key: F) -> Option<&mut TransferState>
+    fn try_push_state<F, K>(
+        stack: &mut Vec<TransferState>,
+        state: TransferState,
+        key: F,
+    ) -> Option<&mut TransferState>
     where
         F: Fn(&TransferState) -> K,
         K: PartialEq,
@@ -166,7 +170,9 @@ impl Simulator<'_> {
                 // the cycle cannot move together.
                 Some(Err(()))
             }
-        } else { None }
+        } else {
+            None
+        }
     }
 
     /// Starts a new move and push it to the move stack. Also pushes the old
@@ -176,7 +182,8 @@ impl Simulator<'_> {
     fn push_move(&mut self, cell_id: usize, direction: Direction) -> MoveState {
         let current = MoveState::new(&self.game.cells[cell_id], direction);
         self.move_stack.push(current);
-        self.transfer_stack.push(std::mem::take(&mut self.transfer_cache));
+        self.transfer_stack
+            .push(std::mem::take(&mut self.transfer_cache));
         current
     }
 
@@ -199,7 +206,7 @@ impl Simulator<'_> {
                 // together. So we can just update the move index.
                 self.move_index = i;
                 return true;
-            },
+            }
             Some(Err(())) => return false,
             None => (),
         }
@@ -236,10 +243,8 @@ impl Simulator<'_> {
 
         // find the new exit point
         exit_point = match current.direction {
-            Direction::Up | Direction::Down =>
-                (exit_point + current.gpos.pos.0) / block.width,
-            Direction::Left | Direction::Right =>
-                (exit_point + current.gpos.pos.1) / block.height,
+            Direction::Up | Direction::Down => (exit_point + current.gpos.pos.0) / block.width,
+            Direction::Left | Direction::Right => (exit_point + current.gpos.pos.1) / block.height,
         };
 
         let context_no = match exit {
@@ -258,10 +263,12 @@ impl Simulator<'_> {
         if let Some(state) = TransferCache::try_push_state(
             &mut self.transfer_cache.exit,
             state,
-            TransferState::exit_key
+            TransferState::exit_key,
         ) {
             // this is an infinite exit
-            let inf_exit_id = self.game.inf_exit_id_for(context_no, state.degree)
+            let inf_exit_id = self
+                .game
+                .inf_exit_id_for(context_no, state.degree)
                 .unwrap_or_else(|| self.game.add_inf_exit_for(context_no, state.degree));
 
             // redirect the exit to the inf exit
@@ -328,7 +335,11 @@ impl Simulator<'_> {
     ///
     /// Returns true if the interaction was successful.
     fn try_interact(&mut self, current: MoveState, target_id: usize, point: TransferPoint) -> bool {
-        self.game.config.attempt_order.clone().iter()
+        self.game
+            .config
+            .attempt_order
+            .clone()
+            .iter()
             .any(|action_type| match action_type {
                 ActionType::Push => self.try_push(current, target_id),
                 ActionType::Enter => self.try_enter(current, target_id, point),
@@ -388,7 +399,12 @@ impl Simulator<'_> {
         self.try_move(target_id, current.direction)
     }
 
-    fn try_enter(&mut self, mut current: MoveState, target_id: usize, mut enter_point: TransferPoint) -> bool {
+    fn try_enter(
+        &mut self,
+        mut current: MoveState,
+        target_id: usize,
+        mut enter_point: TransferPoint,
+    ) -> bool {
         // print!("{}", "  ".repeat(self.move_stack.len()));
         // println!("try_enter: {:?} {:?} {:?}", current, target_id, enter_point);
 
@@ -400,13 +416,13 @@ impl Simulator<'_> {
                     return false;
                 }
                 block
-            },
+            }
             Cell::Reference(reference) => {
                 if !reference.can_enter() {
                     return false;
                 }
                 self.game.block_by_no(reference.target_no).unwrap()
-            },
+            }
         };
 
         if !block.can_enter() {
@@ -418,7 +434,7 @@ impl Simulator<'_> {
             match current.direction {
                 Direction::Left => current.direction = Direction::Right,
                 Direction::Right => current.direction = Direction::Left,
-                _ => enter_point = ONE_POINT -  enter_point,
+                _ => enter_point = ONE_POINT - enter_point,
             };
         }
 
@@ -434,10 +450,12 @@ impl Simulator<'_> {
         if let Some(state) = TransferCache::try_push_state(
             &mut self.transfer_cache.enter,
             state,
-            TransferState::enter_key
+            TransferState::enter_key,
         ) {
             // this is an infinite enter
-            let inf_enter_id = self.game.inf_enter_id_for(block, state.degree)
+            let inf_enter_id = self
+                .game
+                .inf_enter_id_for(block, state.degree)
                 .unwrap_or_else(|| self.game.add_inf_enter_for(state.block_no, state.degree));
 
             // redirect to the inf enter block
@@ -470,7 +488,7 @@ impl Simulator<'_> {
                 Direction::Down => Pos(enter_coord(block.width), block.height - 1),
                 Direction::Left => Pos(block.width - 1, enter_coord(block.height)),
                 Direction::Right => Pos(0, enter_coord(block.height)),
-            }
+            },
         };
 
         // try to interact with the enter pos
