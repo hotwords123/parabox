@@ -136,9 +136,9 @@ impl Simulator<'_> {
     }
 
     pub fn play(&mut self, direction: Direction) {
-        for (i, player_id) in self.game.player_ids.clone().iter().enumerate() {
+        for i in 0..self.game.player_ids.len() {
             self.player_index = i;
-            if self.try_move(*player_id, direction) {
+            if self.try_move(self.game.player_ids[i], direction) {
                 for state in &self.move_stack[self.move_index..] {
                     state.apply(self.game);
                 }
