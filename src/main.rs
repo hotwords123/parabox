@@ -31,7 +31,7 @@ fn main() {
 
     let stdout = std::io::stdout();
     let mut writer = BufWriter::new(stdout);
-    render(history.last().unwrap(), &mut writer).unwrap();
+    render(history.last().unwrap(), &mut writer, true).unwrap();
 
     let mut repaint = true;
 
@@ -67,7 +67,7 @@ fn main() {
 
                 let game = history.last().unwrap();
                 if repaint {
-                    render(game, &mut writer).unwrap();
+                    render(game, &mut writer, false).unwrap();
                 }
                 if game.won() {
                     println!("You won!");
@@ -100,8 +100,10 @@ fn block_no_to_char(block_no: BlockNo) -> char {
         .unwrap_or('G')
 }
 
-fn render(game: &Game, out: &mut impl Write) -> crossterm::Result<()> {
-    out.queue(terminal::Clear(terminal::ClearType::All))?;
+fn render(game: &Game, out: &mut impl Write, clear: bool) -> crossterm::Result<()> {
+    if clear {
+        out.queue(terminal::Clear(terminal::ClearType::All))?;
+    }
 
     const WIDTH: u16 = 19;
     const HEIGHT: u16 = 16;
